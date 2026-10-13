@@ -1,0 +1,1826 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pumpkin Projector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Creepster&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --stage: #000000;
+    --panel: rgba(18, 13, 10, 0.94);
+    --panel-edge: #34261b;
+    --ink: #f1e6d4;
+    --ink-dim: #a8957f;
+    --pumpkin: #ff8a1f;
+    --pumpkin-deep: #c85a00;
+    --field: #261a12;
+    --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-title: "Creepster", "Chalkduster", "Papyrus", fantasy, serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body { height: 100%; margin: 0; background: var(--stage); color: var(--ink); font-family: var(--font-body); overflow: hidden; }
+  [hidden] { display: none !important; }
+
+  canvas#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #000; }
+  body.panel-hidden canvas#stage { cursor: none; }
+
+  #panel {
+    position: fixed; top: env(safe-area-inset-top, 0px); bottom: env(safe-area-inset-bottom, 0px); left: 0;
+    width: min(330px, 92vw); overflow-y: auto; box-sizing: border-box;
+    padding: 18px 18px 28px; background: var(--panel); border-right: 1px solid var(--panel-edge);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    transition: transform .25s ease, opacity .3s ease;
+    z-index: 5;
+  }
+  body.panel-hidden #panel { transform: translateX(-102%); pointer-events: none; }
+  body.panel-right #panel { left: auto; right: 0; border-right: 0; border-left: 1px solid var(--panel-edge); }
+  body.panel-right.panel-hidden #panel { transform: translateX(102%); }
+  body.panel-right #peek { left: auto; right: 10px; }
+  body.idle #panel:not(:hover):not(:focus-within) { opacity: 0; }
+
+  h1 { font-family: var(--font-title); font-weight: 400; font-size: 34px; letter-spacing: .02em; margin: 0 0 2px; color: var(--pumpkin); line-height: 1.05; }
+  .hint { margin: 0 0 14px; font-size: 13px; color: var(--ink-dim); line-height: 1.4; }
+  h2 { font-size: 15px; font-weight: 700; margin: 22px 0 10px; padding-top: 14px; border-top: 1px solid var(--panel-edge); color: var(--ink); }
+  label.row { display: grid; grid-template-columns: 82px 1fr 44px; gap: 8px; align-items: center; margin: 8px 0; font-size: 13px; }
+  label.row output { text-align: right; color: var(--ink-dim); font-variant-numeric: tabular-nums; font-size: 12px; }
+  label.stack { display: block; margin: 8px 0; font-size: 13px; }
+  label.stack > span { display: block; margin-bottom: 4px; color: var(--ink-dim); }
+  label.check { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: 13px; }
+
+  input[type=range] { width: 100%; accent-color: var(--pumpkin); margin: 0; }
+  input[type=checkbox] { accent-color: var(--pumpkin); width: 16px; height: 16px; }
+  input[type=color] { width: 100%; height: 34px; padding: 2px; background: var(--field); border: 1px solid var(--panel-edge); border-radius: 6px; }
+  select, input[type=file], input[type=text], textarea {
+    width: 100%; box-sizing: border-box; background: var(--field); color: var(--ink);
+    border: 1px solid var(--panel-edge); border-radius: 6px; padding: 8px 8px; font: inherit; font-size: 13px;
+  }
+  input[type=file]::file-selector-button {
+    background: var(--pumpkin-deep); color: #fff; border: 0; border-radius: 4px; padding: 5px 10px; margin-right: 8px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .filerow { margin: 10px 0; }
+  .filerow .fname { display: block; font-size: 12px; color: var(--ink-dim); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filerow .fcap { font-size: 13px; margin-bottom: 4px; display: block; }
+
+  button {
+    font: inherit; font-size: 13px; font-weight: 500; color: var(--ink); background: var(--field);
+    border: 1px solid var(--panel-edge); border-radius: 6px; padding: 9px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--pumpkin); }
+  button.primary { background: var(--pumpkin); border-color: var(--pumpkin); color: #1a0e03; font-weight: 700; }
+  button.primary:hover { background: #ffa04a; }
+  button[aria-pressed="true"] { background: #3b2412; border-color: var(--pumpkin); color: #ffc933; }
+  .btnrow { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+  .btnrow button { flex: 1 1 auto; }
+  details { margin: 12px 0; font-size: 13px; border: 1px solid var(--panel-edge); border-radius: 6px; padding: 8px 10px; }
+  summary { cursor: pointer; color: var(--pumpkin); font-weight: 500; }
+  details .hint { margin: 8px 0 0; }
+  details .btnrow { margin: 8px 0; }
+  #livestop { width: 100%; margin-bottom: 4px; }
+  .livepicks { display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 2px; }
+  .livepicks label.check { margin: 4px 0; }
+  .prow { display: grid; grid-template-columns: 1fr 1.3fr; gap: 8px; align-items: center; margin: 6px 0; }
+  .prow label.check { margin: 0; }
+  details .filerow { margin: 8px 0; }
+  textarea { font-size: 12px; resize: vertical; min-height: 90px; margin: 8px 0; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .tabs button { flex: 1; }
+  .tabs button[aria-selected="true"] { background: var(--pumpkin); border-color: var(--pumpkin); color: #1a0e03; font-weight: 700; }
+  #status { font-size: 12px; color: #ffb36b; min-height: 16px; margin: 6px 0 0; line-height: 1.35; }
+
+  :focus-visible { outline: 2px solid #ffc933; outline-offset: 2px; }
+
+  #peek {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    opacity: 0; pointer-events: none; transition: opacity .3s ease;
+  }
+  body.panel-hidden #peek.show { opacity: 1; pointer-events: auto; }
+  /* ---- stepped panel ---- */
+  #panel { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+  .panelhead { flex: none; padding: 14px 18px 12px; border-bottom: 1px solid var(--panel-edge); }
+  .panelhead h1 { font-size: 30px; margin: 0; }
+  .panelhead .hint { margin: 2px 0 8px; }
+  .panelhead .btnrow { margin: 6px 0 2px; }
+  .panelhead #status { margin: 4px 0 0; min-height: 0; }
+  .panelbody { flex: 1; overflow-y: auto; padding: 2px 18px 28px; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+  .stepbtn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px; font-size: 12px; line-height: 1.1; }
+  .stepbtn b { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; background: var(--panel); border: 1px solid var(--panel-edge); }
+  .stepbtn[aria-selected="true"], .subtabs button[aria-selected="true"] { background: var(--pumpkin); border-color: var(--pumpkin); color: #1a0e03; font-weight: 700; }
+  .stepbtn[aria-selected="true"] b { background: #1a0e03; border-color: #1a0e03; color: var(--pumpkin); }
+  .step h2:first-child { border-top: 0; margin-top: 16px; padding-top: 0; }
+  h3 { font-size: 13px; font-weight: 700; color: var(--pumpkin); margin: 18px 0 4px; }
+  .subtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 14px 0 4px; }
+  .stepnav { display: flex; gap: 8px; margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--panel-edge); }
+  .stepnav button { flex: 1; }
+  .howmany button { flex: 1 1 0; }
+  .stagehead { margin: 16px 0 6px; }
+  .stagenum { font-size: 11px; font-weight: 700; color: var(--pumpkin); }
+  .stagehead h2 { margin: 2px 0 4px; padding: 0; border-top: 0; }
+  .stagehead .hint { margin: 0; }
+  .step > h3:first-of-type { margin-top: 14px; }
+  .step > h2 { margin-top: 22px; }
+  .srcblock { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--panel-edge); border-radius: 8px; background: rgba(255, 255, 255, 0.02); }
+  .srcblock .filerow { margin: 0; }
+  .usedby { display: block; font-size: 12px; color: var(--ink-dim); margin: 0 0 6px; }
+  .srcblock .btnrow { margin: 8px 0 4px; }
+  .pcard { margin: 12px 0; padding: 4px 12px 10px; border: 1px solid var(--panel-edge); border-radius: 8px; background: rgba(255, 255, 255, 0.02); }
+  .pcard h3 { margin-top: 10px; }
+  #preset { width: 100%; margin: 6px 0 2px; }
+</style>
+</head>
+<body class="">
+<canvas id="stage"></canvas>
+<button id="peek" type="button">Show controls</button>
+
+<aside id="panel" aria-label="Pumpkin controls">
+  <div class="panelhead">
+    <h1>Pumpkin Projector</h1>
+    <p class="hint">H hides this panel and F is fullscreen. Double-click the stage to toggle it.</p>
+    <div class="btnrow">
+      <button id="play" class="primary" type="button">Play</button>
+      <button id="stop" type="button">Stop</button>
+      <button id="test" type="button" aria-pressed="false">Test talk</button>
+    </div>
+    <p id="status" role="status"></p>
+    <nav class="steps" role="tablist" aria-label="Setup steps">
+      <button type="button" class="stepbtn" role="tab" data-step="1" aria-selected="true"><b>1</b>Sound</button>
+      <button type="button" class="stepbtn" role="tab" data-step="2" aria-selected="false"><b>2</b>Place</button>
+      <button type="button" class="stepbtn" role="tab" data-step="3" aria-selected="false"><b>3</b>Look</button>
+      <button type="button" class="stepbtn" role="tab" data-step="4" aria-selected="false"><b>4</b>Show</button>
+    </nav>
+  </div>
+
+  <div class="panelbody" id="panelbody">
+
+  <section class="step" data-step="1">
+    <div class="stagehead"><span class="stagenum">Step 1 of 4</span><h2>Sound and pumpkins</h2><p class="hint">Choose how many pumpkins you are using and what each one listens to. The setup for each sound appears below as you pick it.</p></div>
+
+    <h3>How many pumpkins?</h3>
+    <div class="btnrow howmany">
+      <button type="button" data-n="1" aria-pressed="false">1 pumpkin</button>
+      <button type="button" data-n="2" aria-pressed="false">2 pumpkins</button>
+      <button type="button" data-n="3" aria-pressed="false">3 pumpkins</button>
+    </div>
+
+    <h3>What each pumpkin listens to</h3>
+    <div class="plist">
+      <div class="prow">
+        <label class="check"><input type="checkbox" id="on-0"> Pumpkin 1</label>
+        <select id="src-0" aria-label="Sound source for pumpkin 1">
+        <option value="shared">Shared MP3</option>
+        <option value="file">Its own MP3</option>
+        <option value="tab">Tab audio</option>
+        <option value="mic">Microphone</option>
+        <option value="lyrics">Timed lyrics</option>
+        </select>
+      </div>
+      <div class="prow">
+        <label class="check"><input type="checkbox" id="on-1"> Pumpkin 2</label>
+        <select id="src-1" aria-label="Sound source for pumpkin 2">
+        <option value="shared">Shared MP3</option>
+        <option value="file">Its own MP3</option>
+        <option value="tab">Tab audio</option>
+        <option value="mic">Microphone</option>
+        <option value="lyrics">Timed lyrics</option>
+        </select>
+      </div>
+      <div class="prow">
+        <label class="check"><input type="checkbox" id="on-2"> Pumpkin 3</label>
+        <select id="src-2" aria-label="Sound source for pumpkin 3">
+        <option value="shared">Shared MP3</option>
+        <option value="file">Its own MP3</option>
+        <option value="tab">Tab audio</option>
+        <option value="mic">Microphone</option>
+        <option value="lyrics">Timed lyrics</option>
+        </select>
+      </div>
+    </div>
+    <div id="turnsRow" hidden>
+      <label class="check"><input type="checkbox" id="turns"> Take turns when pumpkins share a sound</label>
+    </div>
+    <p class="hint" id="srcInfo" role="status"></p>
+
+    <h3>Set up the sound</h3>
+    <p class="hint" id="noSrc" hidden>Switch on at least one pumpkin above.</p>
+
+    <div class="srcblock" id="blk-lyrics" hidden>
+      <span class="fcap">Timed lyrics</span><span class="usedby" id="by-lyrics"></span>
+      <label class="stack"><span>Sound feed for the lyrics</span>
+        <select id="lfeed">
+          <option value="shared">Shared MP3</option>
+          <option value="tab">Tab audio</option>
+          <option value="mic">Microphone</option>
+          <option value="none">None, I will start it by hand</option>
+        </select>
+      </label>
+      <p class="hint">The feed makes the dancing follow the beat, lets the mouths follow the real loudness a little, and lets Wait for sound start the lyrics. Set it up in the box that appears below.</p>
+      <label class="check" id="followRow"><input type="checkbox" id="followmp3"> Follow the MP3's position, including pauses and skips</label>
+      <label class="row" id="loudRow"><span>Follow loudness</span><input type="range" id="lloud" min="0" max="1" step="0.01"><output id="o-lloud"></output></label>
+    <p class="hint">Paste lyrics you have the right to use, one line per row, with a time before each line like [0:12.50]. This page does not include or look up lyrics. Then set a pumpkin's source to Timed lyrics.</p>
+    <textarea id="lyrics" rows="8" spellcheck="false" placeholder="[0:12.50] Words for the first line&#10;[0:16.00] Words for the second line"></textarea>
+    <label class="stack"><span>Start at this point in the song (m:ss)</span><input type="text" id="lstart" value="0:00" inputmode="decimal"></label>
+    <label class="row"><span>Line spacing</span><input type="range" id="lgap" min="1" max="10" step="0.5"><output id="o-lgap"></output></label>
+    <label class="row"><span>Syllable</span><input type="range" id="sylen" min="0.15" max="0.8" step="0.01"><output id="o-sylen"></output></label>
+      <label class="row"><span>Sound level</span><input type="range" id="autolevel" min="0.005" max="0.1" step="0.001"><output id="o-autolevel"></output></label>
+    <div class="btnrow">
+      <button id="lstartbtn" class="primary" type="button">Start lyrics</button>
+      <button id="lwait" type="button">Wait for sound</button>
+      <button id="lpause" type="button">Pause</button>
+      <button id="lstop" type="button">Stop</button>
+    </div>
+    <div class="btnrow">
+      <button id="lnm5" type="button">Earlier 0.5 s</button>
+      <button id="lnm1" type="button">Earlier 0.1 s</button>
+      <button id="lnp1" type="button">Later 0.1 s</button>
+      <button id="lnp5" type="button">Later 0.5 s</button>
+    </div>
+    <p class="hint" id="lyrInfo"></p>
+      <p class="hint">Wait for sound starts the lyrics by itself the moment the first sound is heard from the shared MP3, tab audio or microphone, using your start point as the time. Raise Sound level if room noise starts it too early, or lower it if it starts too late.</p>
+    <p class="hint">Play the song yourself, in Spotify or anywhere else. When it reaches your start point, press Start lyrics. If the mouths run early or late, use the nudge buttons. Line spacing is only used when the lyrics have no times, and Syllable sets how long each syllable lasts. Spotify does not let other pages read its audio or play position, so this keeps time with its own clock.</p>
+  
+    </div>
+
+    <div class="srcblock" id="blk-shared" hidden>
+      <div class="filerow">
+        <span class="fcap">Shared MP3</span>
+        <span class="usedby" id="by-shared"></span>
+        <input type="file" id="f-0" accept="audio/*,.mp3">
+        <span class="fname" id="n-0">No file loaded</span>
+      </div>
+    </div>
+    <div class="srcblock" id="blk-file-0" hidden>
+      <div class="filerow"><span class="fcap">Pumpkin 1's own MP3</span><input type="file" id="f-1" accept="audio/*,.mp3"><span class="fname" id="n-1">No file loaded</span></div>
+    </div>
+    <div class="srcblock" id="blk-file-1" hidden>
+      <div class="filerow"><span class="fcap">Pumpkin 2's own MP3</span><input type="file" id="f-2" accept="audio/*,.mp3"><span class="fname" id="n-2">No file loaded</span></div>
+    </div>
+    <div class="srcblock" id="blk-file-2" hidden>
+      <div class="filerow"><span class="fcap">Pumpkin 3's own MP3</span><input type="file" id="f-3" accept="audio/*,.mp3"><span class="fname" id="n-3">No file loaded</span></div>
+    </div>
+
+    <div class="srcblock" id="blk-tab" hidden>
+      <span class="fcap">Tab audio</span><span class="usedby" id="by-tab"></span>
+      <p class="hint">Open the video in its own browser tab first. When the picker appears, choose that tab and tick the option to share tab audio. Works in desktop Chrome and Edge.</p>
+      <div class="btnrow">
+        <button id="livetab" type="button">Capture tab audio</button>
+        <button id="livetabstop" type="button" hidden>Stop tab audio</button>
+      </div>
+    </div>
+    <div class="srcblock" id="blk-mic" hidden>
+      <span class="fcap">Microphone</span><span class="usedby" id="by-mic"></span>
+      <div class="btnrow">
+        <button id="livemic" type="button">Use microphone</button>
+        <button id="livemicstop" type="button" hidden>Stop microphone</button>
+      </div>
+    </div>
+    <div class="srcblock" id="blk-live" hidden>
+      <p class="hint" id="n-live">Not listening</p>
+      <p class="hint">Live sound is only listened to. Nothing plays from this page, so the sound stays where it started and you control its volume there.</p>
+    </div>
+
+    <h3>Playback</h3>
+    <label class="row"><span>Volume</span><input type="range" id="vol" min="0" max="1" step="0.01"><output id="o-vol"></output></label>
+    <label class="check"><input type="checkbox" id="loop"> Loop the audio</label>
+
+    <h3>How closely they follow the sound</h3>
+    <label class="row"><span>Mouth range</span><input type="range" id="sens" min="0.4" max="2" step="0.01"><output id="o-sens"></output></label>
+    <label class="row"><span>Speech focus</span><input type="range" id="speech" min="0" max="1" step="0.01"><output id="o-speech"></output></label>
+    <p class="hint">Raise speech focus so the mouths ignore instruments in a song. Lower it for plain spoken audio.</p>
+    <label class="row"><span>Beat pickup</span><input type="range" id="beatsens" min="0.4" max="2.5" step="0.01"><output id="o-beatsens"></output></label>
+    <label class="check"><input type="checkbox" id="tempolock"> Lock to a steady tempo</label>
+    <p class="hint" id="tempoInfo"></p>
+    <label class="row"><span>Min spacing</span><input type="range" id="beatgap" min="0.1" max="0.6" step="0.01"><output id="o-beatgap"></output></label>
+    <label class="row"><span>Bass from</span><input type="range" id="basslo" min="30" max="200" step="5"><output id="o-basslo"></output></label>
+    <label class="row"><span>Bass to</span><input type="range" id="basshi" min="60" max="400" step="5"><output id="o-basshi"></output></label>
+
+    <div class="stepnav"><button type="button" class="primary" data-go="2">Next</button></div>
+  </section>
+
+  <section class="step" data-step="2" hidden>
+    <div class="stagehead"><span class="stagenum">Step 2 of 4</span><h2>Place the faces</h2><p class="hint">Move each face over its pumpkin. Turn on the guides to see where each one sits on the projector.</p></div>
+    <label class="check"><input type="checkbox" id="align"> Show alignment guides</label>
+    <p class="hint nocards" hidden>Switch on at least one pumpkin in step 1.</p>
+    <div class="pcard" data-p="0">
+      <h3>Pumpkin 1</h3>
+      <label class="row"><span>Left / right</span><input type="range" id="sx-0" min="0" max="1" step="0.001"><output id="o-sx-0"></output></label>
+      <label class="row"><span>Up / down</span><input type="range" id="sy-0" min="0" max="1" step="0.001"><output id="o-sy-0"></output></label>
+      <label class="row"><span>Face size</span><input type="range" id="ssize-0" min="0.3" max="2.5" step="0.01"><output id="o-ssize-0"></output></label>
+      <label class="row"><span>Tilt</span><input type="range" id="stilt-0" min="-45" max="45" step="0.5"><output id="o-stilt-0"></output></label>
+    </div>
+    <div class="pcard" data-p="1">
+      <h3>Pumpkin 2</h3>
+      <label class="row"><span>Left / right</span><input type="range" id="sx-1" min="0" max="1" step="0.001"><output id="o-sx-1"></output></label>
+      <label class="row"><span>Up / down</span><input type="range" id="sy-1" min="0" max="1" step="0.001"><output id="o-sy-1"></output></label>
+      <label class="row"><span>Face size</span><input type="range" id="ssize-1" min="0.3" max="2.5" step="0.01"><output id="o-ssize-1"></output></label>
+      <label class="row"><span>Tilt</span><input type="range" id="stilt-1" min="-45" max="45" step="0.5"><output id="o-stilt-1"></output></label>
+    </div>
+    <div class="pcard" data-p="2">
+      <h3>Pumpkin 3</h3>
+      <label class="row"><span>Left / right</span><input type="range" id="sx-2" min="0" max="1" step="0.001"><output id="o-sx-2"></output></label>
+      <label class="row"><span>Up / down</span><input type="range" id="sy-2" min="0" max="1" step="0.001"><output id="o-sy-2"></output></label>
+      <label class="row"><span>Face size</span><input type="range" id="ssize-2" min="0.3" max="2.5" step="0.01"><output id="o-ssize-2"></output></label>
+      <label class="row"><span>Tilt</span><input type="range" id="stilt-2" min="-45" max="45" step="0.5"><output id="o-stilt-2"></output></label>
+    </div>
+    <div class="stepnav"><button type="button" data-go="1">Back</button><button type="button" class="primary" data-go="3">Next</button></div>
+  </section>
+
+  <section class="step" data-step="3" hidden>
+    <div class="stagehead"><span class="stagenum">Step 3 of 4</span><h2>Style the faces</h2><p class="hint">First the settings that apply to every pumpkin, then the eyes, mouth and nose of each one.</p></div>
+
+    <h2>All pumpkins</h2>
+    <h3>Light</h3>
+    <label class="stack"><span>Light color</span><input type="color" id="color"></label>
+    <label class="row"><span>Glow</span><input type="range" id="glow" min="0" max="1" step="0.01"><output id="o-glow"></output></label>
+    <label class="row"><span>Candle look</span><input type="range" id="candle" min="0" max="1" step="0.01"><output id="o-candle"></output></label>
+    <label class="row"><span>Flicker</span><input type="range" id="flicker" min="0" max="1" step="0.01"><output id="o-flicker"></output></label>
+    <h3>Eyes</h3>
+    <label class="row"><span>Eye speed</span><input type="range" id="wander" min="0.2" max="3" step="0.01"><output id="o-wander"></output></label>
+    <label class="check"><input type="checkbox" id="blink"> Blink now and then</label>
+    <label class="check"><input type="checkbox" id="pupils"> Also show pupils in the plain eyes</label>
+    <label class="row"><span>Pupil size</span><input type="range" id="pupilsize" min="0.5" max="1.8" step="0.01"><output id="o-pupilsize"></output></label>
+    <h3>Face</h3>
+    <label class="check"><input type="checkbox" id="nose"> Draw noses</label>
+    <label class="row"><span>O shape</span><input type="range" id="round" min="0" max="1" step="0.01"><output id="o-round"></output></label>
+    <h3>Dancing</h3>
+    <label class="row"><span>Beat bounce</span><input type="range" id="bob" min="0" max="2" step="0.01"><output id="o-bob"></output></label>
+    <label class="row"><span>Hop height</span><input type="range" id="hop" min="0" max="2" step="0.01"><output id="o-hop"></output></label>
+    <label class="row"><span>Sway</span><input type="range" id="sway" min="0" max="2" step="0.01"><output id="o-sway"></output></label>
+    <label class="row"><span>Snappiness</span><input type="range" id="snap" min="0.5" max="2" step="0.01"><output id="o-snap"></output></label>
+
+    <h2>Each pumpkin</h2>
+    <p class="hint nocards" hidden>Switch on at least one pumpkin in step 1.</p>
+    <button id="preset" type="button">Use the three-face look on all</button>
+    <div class="pcard" data-p="0">
+      <h3>Pumpkin 1</h3>
+      <label class="stack"><span>Eye shape</span><select id="estyle-0">
+      <option value="triangle">Triangle</option>
+      <option value="round">Round</option>
+      <option value="angry">Angry slant</option>
+      <option value="tall">Tall oval</option>
+      <option value="skull">Skull socket with notch (notch pupils)</option>
+      <option value="nround">Round with notch (notch pupils)</option>
+      <option value="noval">Tall oval with notch (notch pupils)</option>
+      <option value="nangry">Angry slant with notch (notch pupils)</option>
+      <option value="nlidded">Heavy lid with notch (notch pupils)</option>
+      <option value="ngoggle">Big oval with notch (notch pupils)</option>
+      <option value="ntri">Triangle with notch (notch pupils)</option>
+      <option value="lidded">Heavy lid</option>
+      <option value="goggle">Big oval</option>
+    
+      </select></label>
+      <label class="row"><span>Eye size</span><input type="range" id="seye-0" min="0.5" max="1.6" step="0.01"><output id="o-seye-0"></output></label>
+      <label class="stack"><span>Mouth style</span><select id="mstyle-0">
+      <option value="smile">Smile that rounds to an O</option>
+      <option value="bowl">Cartoon grin with tongue</option>
+      <option value="buck">Buck teeth</option>
+      <option value="teeth">Row of teeth</option>
+      <option value="zigzag">Jagged</option>
+      <option value="oval">Round O</option>
+    
+      </select></label>
+      <label class="stack"><span>Nose</span><select id="nstyle-0">
+      <option value="triangle">Triangle</option>
+      <option value="rounded">Rounded triangle</option>
+      <option value="none">None</option>
+    
+      </select></label>
+    </div>
+    <div class="pcard" data-p="1">
+      <h3>Pumpkin 2</h3>
+      <label class="stack"><span>Eye shape</span><select id="estyle-1">
+      <option value="triangle">Triangle</option>
+      <option value="round">Round</option>
+      <option value="angry">Angry slant</option>
+      <option value="tall">Tall oval</option>
+      <option value="skull">Skull socket with notch (notch pupils)</option>
+      <option value="nround">Round with notch (notch pupils)</option>
+      <option value="noval">Tall oval with notch (notch pupils)</option>
+      <option value="nangry">Angry slant with notch (notch pupils)</option>
+      <option value="nlidded">Heavy lid with notch (notch pupils)</option>
+      <option value="ngoggle">Big oval with notch (notch pupils)</option>
+      <option value="ntri">Triangle with notch (notch pupils)</option>
+      <option value="lidded">Heavy lid</option>
+      <option value="goggle">Big oval</option>
+    
+      </select></label>
+      <label class="row"><span>Eye size</span><input type="range" id="seye-1" min="0.5" max="1.6" step="0.01"><output id="o-seye-1"></output></label>
+      <label class="stack"><span>Mouth style</span><select id="mstyle-1">
+      <option value="smile">Smile that rounds to an O</option>
+      <option value="bowl">Cartoon grin with tongue</option>
+      <option value="buck">Buck teeth</option>
+      <option value="teeth">Row of teeth</option>
+      <option value="zigzag">Jagged</option>
+      <option value="oval">Round O</option>
+    
+      </select></label>
+      <label class="stack"><span>Nose</span><select id="nstyle-1">
+      <option value="triangle">Triangle</option>
+      <option value="rounded">Rounded triangle</option>
+      <option value="none">None</option>
+    
+      </select></label>
+    </div>
+    <div class="pcard" data-p="2">
+      <h3>Pumpkin 3</h3>
+      <label class="stack"><span>Eye shape</span><select id="estyle-2">
+      <option value="triangle">Triangle</option>
+      <option value="round">Round</option>
+      <option value="angry">Angry slant</option>
+      <option value="tall">Tall oval</option>
+      <option value="skull">Skull socket with notch (notch pupils)</option>
+      <option value="nround">Round with notch (notch pupils)</option>
+      <option value="noval">Tall oval with notch (notch pupils)</option>
+      <option value="nangry">Angry slant with notch (notch pupils)</option>
+      <option value="nlidded">Heavy lid with notch (notch pupils)</option>
+      <option value="ngoggle">Big oval with notch (notch pupils)</option>
+      <option value="ntri">Triangle with notch (notch pupils)</option>
+      <option value="lidded">Heavy lid</option>
+      <option value="goggle">Big oval</option>
+    
+      </select></label>
+      <label class="row"><span>Eye size</span><input type="range" id="seye-2" min="0.5" max="1.6" step="0.01"><output id="o-seye-2"></output></label>
+      <label class="stack"><span>Mouth style</span><select id="mstyle-2">
+      <option value="smile">Smile that rounds to an O</option>
+      <option value="bowl">Cartoon grin with tongue</option>
+      <option value="buck">Buck teeth</option>
+      <option value="teeth">Row of teeth</option>
+      <option value="zigzag">Jagged</option>
+      <option value="oval">Round O</option>
+    
+      </select></label>
+      <label class="stack"><span>Nose</span><select id="nstyle-2">
+      <option value="triangle">Triangle</option>
+      <option value="rounded">Rounded triangle</option>
+      <option value="none">None</option>
+    
+      </select></label>
+    </div>
+    <div class="stepnav"><button type="button" data-go="2">Back</button><button type="button" class="primary" data-go="4">Next</button></div>
+  </section>
+
+  <section class="step" data-step="4" hidden>
+    <div class="stagehead"><span class="stagenum">Step 4 of 4</span><h2>Show it</h2><p class="hint">Go fullscreen, hide this panel, and save the setup so you can come back to it.</p></div>
+    <div class="btnrow">
+      <button id="full" type="button">Fullscreen</button>
+      <button id="hide" type="button">Hide panel</button>
+    </div>
+    <div class="btnrow">
+      <button id="side" type="button">Move to other side</button>
+    </div>
+
+    <h3>Save your setup</h3>
+    <p class="hint">Your settings save themselves in this browser as you change them. Save a setup to keep a named version you can come back to, for example one for each party.</p>
+  <label class="stack"><span>Name for this setup</span><input type="text" id="setupname" maxlength="40" placeholder="Front porch"></label>
+  <div class="btnrow"><button id="setupsave" class="primary" type="button">Save setup</button></div>
+  <label class="stack"><span>Saved setups</span><select id="setuplist"></select></label>
+  <div class="btnrow">
+    <button id="setupload" type="button">Load</button>
+    <button id="setupdel" type="button">Delete</button>
+  </div>
+  <label class="check"><input type="checkbox" id="remember"> Remember my MP3 files in this browser</label>
+  <button id="forget" type="button">Forget saved MP3s</button>
+  <p class="hint" id="saveInfo" role="status"></p>
+
+    <h3>Start over</h3>
+    <div class="btnrow">
+      <button id="reset" type="button">Reset all</button>
+    </div>
+    <div class="stepnav"><button type="button" data-go="3">Back</button></div>
+  </section>
+
+  </div>
+</aside>
+
+<script>
+(() => {
+  const TAU = Math.PI * 2;
+  const $ = id => document.getElementById(id);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  /* ---------- settings ---------- */
+  const KEY = 'pumpkinProjector.v1';
+  const defaults = () => ({
+    g: { color: '#ffc933', glow: 0.5, nose: true, wander: 1, blink: true, sens: 1, volume: 0.9, loop: false, align: false, side: 'left', speech: 0.7, bob: 1, beatSens: 1, hop: 1, sway: 1, snap: 1, beatGap: 0.2, bassLo: 40, bassHi: 150, tempoLock: false, turns: true, pupils: false, pupilSize: 1, remember: true, lyrics: '', lstart: '0:00', lgap: 4, sylLen: 0.3, autoLevel: 0.02, lyricFeed: 'shared', lyricLoud: 0.3, followMp3: true, candle: 0.8, flicker: 0.5, round: 1 },
+    p: [
+      { x: 1/6, y: 0.5, size: 1, tilt: -4, eyeStyle: 'skull', eyeSize: 1, on: true, src: 'shared', mouthStyle: 'teeth', nose: 'rounded' },
+      { x: 3/6, y: 0.5, size: 1, tilt: 0,  eyeStyle: 'lidded',   eyeSize: 1, on: true, src: 'shared', mouthStyle: 'bowl', nose: 'triangle' },
+      { x: 5/6, y: 0.5, size: 1, tilt: 4,  eyeStyle: 'goggle',   eyeSize: 1, on: true, src: 'shared', mouthStyle: 'buck', nose: 'none' }
+    ]
+  });
+  let S = defaults();
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved && saved.g && Array.isArray(saved.p) && saved.p.length === 3) {
+      const d = defaults();
+      S = { g: Object.assign(d.g, saved.g), p: saved.p.map((p, i) => Object.assign(d.p[i], p)) };
+      if (saved.p.some(p => p.src === undefined)) {
+        if (saved.g.mode === 'separate') S.p.forEach(p => { p.src = 'file'; });
+        if (saved.g.mode === 'all') S.g.turns = false;
+      }
+    }
+  } catch (e) {}
+  let saveTimer = 0;
+  const save = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const el = document.getElementById('saveInfo'), warn = 'This browser is not letting the page save settings.';
+      try { localStorage.setItem(KEY, JSON.stringify(S)); if (el && el.textContent === warn) el.textContent = ''; }
+      catch (e) { if (el) el.textContent = warn; }
+    }, 250);
+  };
+
+  /* ---------- canvas ---------- */
+  const canvas = $('stage');
+  const ctx = canvas.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* ---------- audio ---------- */
+  let actx = null, master = null;
+  function ensureAudio() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC();
+      master = actx.createGain();
+      master.gain.value = S.g.volume;
+      master.connect(actx.destination);
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // lookup: analyser byte (min -100 dB .. max -30 dB) -> relative power
+  const PWR = new Float32Array(256);
+  for (let i = 0; i < 256; i++) PWR[i] = Math.pow(10, (-100 + i / 255 * 70) / 10);
+
+  class Voice {
+    constructor() {
+      this.buffer = null; this.src = null; this.an = null; this.td = null; this.fd = null;
+      this.startedAt = 0; this.offset = 0; this.playing = false; this.token = 0;
+      this.lvl = 0; this.wf = 1; this.peak = 0.05; this.ratio = 0.4;
+      this.anV = null; this.tdV = null; this.sink = null; this.floor = 0; this.vgate = 1;
+      this.rms = 0; this.pk = 0; this.kick = 0; this.beats = 0; this.bassAvg = -1; this.bassPrev = 0; this.beatCool = 0; this.live = null; this.onsets = []; this.tempo = null;
+      this.fake = { t: Math.random() * 10, speaking: false, timer: rand(0.2, 1), bt: rand(0, 0.5) };
+    }
+    async load(file) {
+      ensureAudio();
+      const ab = await file.arrayBuffer();
+      this.stop();
+      this.buffer = await actx.decodeAudioData(ab);
+    }
+    play() {
+      if (!this.buffer || this.playing) return;
+      this.stopLive();
+      ensureAudio();
+      const src = actx.createBufferSource();
+      src.buffer = this.buffer;
+      src.loop = S.g.loop;
+      const an = actx.createAnalyser();
+      an.fftSize = 1024; an.smoothingTimeConstant = 0.25;
+      src.connect(an); an.connect(master);
+      // speech-focus chain: centre of the stereo image -> 300 Hz to 3.4 kHz band -> its own analyser
+      const split = actx.createChannelSplitter(2);
+      const gL = actx.createGain(); gL.gain.value = 0.5;
+      const gR = actx.createGain(); gR.gain.value = 0.5;
+      const mid = actx.createGain();
+      const hp1 = actx.createBiquadFilter(); hp1.type = 'highpass'; hp1.frequency.value = 300; hp1.Q.value = 0.7;
+      const hp2 = actx.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 300; hp2.Q.value = 0.7;
+      const lp1 = actx.createBiquadFilter(); lp1.type = 'lowpass'; lp1.frequency.value = 3400; lp1.Q.value = 0.7;
+      const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 3400; lp2.Q.value = 0.7;
+      const anV = actx.createAnalyser(); anV.fftSize = 1024; anV.smoothingTimeConstant = 0.2;
+      const sink = actx.createGain(); sink.gain.value = 0;
+      src.connect(split);
+      split.connect(gL, 0); split.connect(gR, 1);
+      gL.connect(mid); gR.connect(mid);
+      mid.connect(hp1); hp1.connect(hp2); hp2.connect(lp1); lp1.connect(lp2); lp2.connect(anV);
+      anV.connect(sink); sink.connect(actx.destination);
+      const token = ++this.token;
+      src.onended = () => {
+        if (this.token !== token) return;
+        this.halt(); this.offset = 0; refreshButtons();
+      };
+      const off = this.offset % this.buffer.duration;
+      src.start(0, off);
+      this.startedAt = actx.currentTime - off;
+      this.src = src; this.an = an;
+      this.td = new Uint8Array(an.fftSize); this.fd = new Uint8Array(an.frequencyBinCount);
+      this.anV = anV; this.tdV = new Uint8Array(anV.fftSize); this.sink = sink;
+      this.floor = 0; this.vgate = 1; this.peak = 0.05;
+      this.bassAvg = -1; this.bassPrev = 0; this.beatCool = 0;
+      this.playing = true;
+    }
+    halt() {
+      this.token++;
+      if (this.src) { try { this.src.stop(); } catch (e) {} try { this.src.disconnect(); } catch (e) {} }
+      if (this.sink) { try { this.sink.disconnect(); } catch (e) {} this.sink = null; }
+      this.anV = null;
+      this.src = null; this.playing = false;
+    }
+    pause() {
+      if (!this.playing) return;
+      this.offset = (actx.currentTime - this.startedAt) % this.buffer.duration;
+      this.halt();
+    }
+    // a bass hit was heard: either bounce right away, or feed the steady-tempo tracker
+    onset(now) {
+      this.onsets.push(now);
+      while (this.onsets.length > 32 || (this.onsets.length && now - this.onsets[0] > 10)) this.onsets.shift();
+      this.estimateTempo(now);
+      if (S.g.tempoLock && this.tempo) {
+        const T = this.tempo.period;
+        let err = ((now - this.tempo.next) % T + T) % T;
+        if (err > T / 2) err -= T;
+        if (Math.abs(err) < T * 0.25) this.tempo.next += err * 0.35;
+      } else {
+        this.kick = 1; this.beats++;
+      }
+    }
+    // find the most common spacing between hits, folded into 80 to 180 BPM
+    estimateTempo(now) {
+      const ts = this.onsets;
+      if (ts.length < 6) return;
+      const LO = 0.33, HI = 0.75, BIN = 0.01, N = Math.ceil((HI - LO) / BIN);
+      const hist = new Float32Array(N + 1);
+      let total = 0;
+      for (let i = Math.max(0, ts.length - 12); i < ts.length; i++) {
+        for (let j = i + 1; j < ts.length && j <= i + 6; j++) {
+          let d = ts[j] - ts[i];
+          if (d < 0.1) continue;
+          while (d < LO) d *= 2;
+          while (d > HI) d /= 2;
+          const bi = Math.round((d - LO) / BIN);
+          for (let k = -2; k <= 2; k++) { const b = bi + k; if (b >= 0 && b <= N) hist[b] += Math.exp(-k * k / 2); }
+          total++;
+        }
+      }
+      if (!total) return;
+      let best = 0;
+      for (let b = 1; b <= N; b++) if (hist[b] > hist[best]) best = b;
+      let mass = 0;
+      for (let b = Math.max(0, best - 2); b <= Math.min(N, best + 2); b++) mass += hist[b];
+      if (mass / (total * 2.48) < 0.35) return;
+      const period = LO + best * BIN;
+      if (!this.tempo) {
+        this.tempo = { period, next: now + period };
+        if (S.g.tempoLock) { this.kick = 1; this.beats++; }
+      } else {
+        this.tempo.period += (period - this.tempo.period) * 0.3;
+      }
+    }
+    // while locked, keep bouncing on the steady pulse even if a kick is missed
+    tempoTick(now) {
+      const t = this.tempo;
+      if (!t || !S.g.tempoLock) return;
+      const last = this.onsets[this.onsets.length - 1];
+      if (last === undefined || now - last > 3) { this.tempo = null; return; }
+      let guard = 0;
+      while (t.next <= now && guard++ < 4) { this.kick = 1; this.beats++; t.next += t.period; }
+      if (t.next <= now) t.next = now + t.period;
+    }
+    stop() { this.halt(); this.stopLive(); this.offset = 0; this.onsets = []; this.tempo = null; }
+    startLive(stream) {
+      ensureAudio();
+      this.stop();
+      // Live input is analysed only. It is never routed to the speakers, so there is no echo or feedback.
+      const node = actx.createMediaStreamSource(stream);
+      const an = actx.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.25;
+      const split = actx.createChannelSplitter(2);
+      const gL = actx.createGain(); gL.gain.value = 0.5;
+      const gR = actx.createGain(); gR.gain.value = 0.5;
+      const mid = actx.createGain();
+      const hp1 = actx.createBiquadFilter(); hp1.type = 'highpass'; hp1.frequency.value = 300; hp1.Q.value = 0.7;
+      const hp2 = actx.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 300; hp2.Q.value = 0.7;
+      const lp1 = actx.createBiquadFilter(); lp1.type = 'lowpass'; lp1.frequency.value = 3400; lp1.Q.value = 0.7;
+      const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 3400; lp2.Q.value = 0.7;
+      const anV = actx.createAnalyser(); anV.fftSize = 1024; anV.smoothingTimeConstant = 0.2;
+      const sink = actx.createGain(); sink.gain.value = 0;
+      node.connect(an); an.connect(sink);
+      node.connect(split);
+      split.connect(gL, 0); split.connect(gR, 1);
+      gL.connect(mid); gR.connect(mid);
+      mid.connect(hp1); hp1.connect(hp2); hp2.connect(lp1); lp1.connect(lp2); lp2.connect(anV);
+      anV.connect(sink); sink.connect(actx.destination);
+      this.an = an; this.anV = anV; this.sink = sink;
+      this.td = new Uint8Array(an.fftSize); this.fd = new Uint8Array(an.frequencyBinCount); this.tdV = new Uint8Array(anV.fftSize);
+      this.floor = 0; this.vgate = 1; this.peak = 0.05;
+      this.bassAvg = -1; this.bassPrev = 0; this.beatCool = 0;
+      this.live = { stream, node };
+    }
+    stopLive() {
+      if (!this.live) return;
+      const l = this.live; this.live = null;
+      try { l.node.disconnect(); } catch (e) {}
+      l.stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+      if (this.sink) { try { this.sink.disconnect(); } catch (e) {} this.sink = null; }
+      this.an = null; this.anV = null;
+    }
+    analyse(dt) {
+      const an = this.an;
+      an.getByteTimeDomainData(this.td);
+      let sum = 0;
+      for (let i = 0; i < this.td.length; i++) { const v = (this.td[i] - 128) / 128; sum += v * v; }
+      const rmsRaw = Math.sqrt(sum / this.td.length);
+      this.rms = rmsRaw;
+      const amt = S.g.speech;
+      let sig = rmsRaw, gate = 1;
+      if (amt > 0 && this.anV) {
+        // 1) loudness of the voice band only (centre channel, 300 Hz to 3.4 kHz)
+        this.anV.getByteTimeDomainData(this.tdV);
+        let sv = 0;
+        for (let i = 0; i < this.tdV.length; i++) { const v = (this.tdV[i] - 128) / 128; sv += v * v; }
+        const rmsV = Math.sqrt(sv / this.tdV.length);
+        // 2) subtract a slowly rising floor so steady instruments and pads fade out,
+        //    while quick syllable bursts stand out above it
+        const rate = rmsV > this.floor ? 0.2 : 4;
+        this.floor += (rmsV - this.floor) * (1 - Math.exp(-dt * rate));
+        const env = Math.max(0, rmsV - this.floor * 1.1);
+        sig = env * amt + rmsRaw * (1 - amt);
+        // 3) how much of the full mix sits in the voice band (bass and cymbals lower this)
+        this.an.getByteFrequencyData(this.fd);
+        const bwF = actx.sampleRate / this.an.fftSize;
+        const en = (f1, f2) => {
+          let s = 0;
+          const a = Math.max(1, Math.floor(f1 / bwF)), b = Math.min(Math.floor(f2 / bwF), this.fd.length - 1);
+          for (let i = a; i <= b; i++) s += PWR[this.fd[i]];
+          return s;
+        };
+        const eL = en(40, 250), eV = en(300, 3400), eH = en(5000, 14000);
+        const frac = eV / (eL + eV + eH + 1e-12);
+        const g = clamp((frac - 0.35) / 0.35, 0, 1);
+        this.vgate += (g - this.vgate) * (1 - Math.exp(-dt * 12));
+        gate = 1 - amt * (1 - this.vgate);
+      }
+      this.peak = Math.max(sig, this.peak * Math.pow(0.85, dt), 0.01 + 0.03 * (1 - amt));
+      const norm = sig / this.peak;
+      const raw = rmsRaw < 0.008 ? 0 : clamp((norm - 0.18) / 0.65, 0, 1);
+      this.lvl = clamp(raw * S.g.sens * gate, 0, 1);
+      // rough vowel shape: more high-band energy = wider mouth, more low-band = rounder mouth
+      an.getByteFrequencyData(this.fd);
+      const bw = actx.sampleRate / an.fftSize;
+      const band = (f1, f2) => {
+        let s = 0, n = 0;
+        for (let i = Math.floor(f1 / bw); i <= Math.min(Math.floor(f2 / bw), this.fd.length - 1); i++) { s += this.fd[i]; n++; }
+        return n ? s / n : 0;
+      };
+      const lo = band(250, 1000), hi = band(1500, 4000);
+      const r = hi / (lo + hi + 1);
+      this.ratio += (r - this.ratio) * (1 - Math.exp(-dt * 8));
+      this.wf = 0.84 + 0.38 * clamp(this.ratio * 1.6, 0, 1);
+      // low-frequency beat detection (roughly 40 to 150 Hz)
+      const bwB = actx.sampleRate / an.fftSize;
+      const bA = Math.max(1, Math.round(S.g.bassLo / bwB)), bB = Math.max(bA, Math.round(S.g.bassHi / bwB));
+      let bs = 0;
+      for (let i = bA; i <= bB; i++) bs += this.fd[i];
+      const bassB = bs / (bB - bA + 1);
+      if (this.bassAvg < 0) this.bassAvg = bassB;
+      this.bassAvg += (bassB - this.bassAvg) * (1 - Math.exp(-dt * 1.2));
+      this.beatCool -= dt;
+      if (this.beatCool <= 0 && bassB > this.bassPrev && bassB - this.bassAvg > 16 / S.g.beatSens && rmsRaw > 0.01) {
+        this.beatCool = S.g.beatGap;
+        this.onset(performance.now() / 1000);
+      }
+      this.bassPrev = bassB;
+      this.tempoTick(performance.now() / 1000);
+    }
+    fakeStep(dt) {
+      const f = this.fake;
+      f.timer -= dt; f.t += dt;
+      f.bt -= dt;
+      if (f.bt <= 0) { f.bt += 0.5; this.kick = 1; this.beats++; }
+      if (f.timer <= 0) { f.speaking = !f.speaking; f.timer = f.speaking ? rand(1, 3.2) : rand(0.5, 1.6); }
+      if (f.speaking) {
+        const syl = Math.pow(Math.abs(Math.sin(f.t * Math.PI * 3.4)), 0.8);
+        this.lvl = syl * (0.55 + 0.45 * Math.abs(Math.sin(f.t * 1.1)));
+        this.wf = 0.95 + 0.2 * Math.sin(f.t * 3.1);
+      } else { this.lvl = 0; this.wf = 1; }
+    }
+  }
+  const voices = [new Voice(), new Voice(), new Voice(), new Voice(), new Voice(), new Voice(), new Voice()];
+  let testTalk = false;
+
+  // voices: 0 = shared MP3, 1..3 = each pumpkin's own MP3, 4 = tab audio, 5 = microphone, 6 = timed lyrics
+  const SRC_IDX = { shared: 0, tab: 4, mic: 5, lyrics: 6 };
+  const isOn = i => S.p[i].on !== false;
+  const vIdx = i => S.p[i].src === 'file' ? i + 1 : (SRC_IDX[S.p[i].src] || 0);
+  // the MP3 voices that a switched-on pumpkin is using
+  const relevantVoices = () => {
+    const set = new Set();
+    [0, 1, 2].forEach(i => { if (isOn(i) && vIdx(i) <= 3) set.add(voices[vIdx(i)]); });
+    return [...set];
+  };
+  const anyPlaying = () => voices.some(v => v.playing || v.live);
+  function stopAll() { voices.forEach(v => v.stop()); refreshButtons(); }
+
+  /* ---------- pumpkin state ---------- */
+  const P = [0, 1, 2].map((_, i) => ({ gx: 0, gy: 0, tx: 0, ty: 0, next: rand(0.3, 1.2), blinkT: rand(1.5, 4), blinkP: -1, open: 0, wf: 1, by: 0, vy: 0, ta: 0, vta: 0, dir: i === 1 ? -1 : 1, lastBeat: 0, fl: 1, flT: 0, flTarget: 1, fx: 0, fy: 0, fxT: 0, fyT: 0, pk: 0 }));
+  const turn = voices.map(() => ({ sp: -1, spoke: false, silence: 0 }));
+
+  const talking = () => anyPlaying() || testTalk;
+
+  function newTarget(i) {
+    const st = P[i];
+    const r = Math.random();
+    let tx, ty;
+    const talkers = [0, 1, 2].filter(j => j !== i && isOn(j) && P[j].open > 0.2);
+    const watching = talkers.length > 0;
+    if (watching && r < 0.5) {
+      const j = talkers[Math.floor(Math.random() * talkers.length)];
+      const dir = Math.sign(S.p[j].x - S.p[i].x) || 1;
+      tx = dir * rand(0.6, 1); ty = rand(-0.3, 0.3);
+    } else if (r < 0.2) {
+      tx = rand(-0.15, 0.15); ty = rand(-0.15, 0.15);
+    } else {
+      const a = Math.random() * TAU, d = rand(0.5, 1);
+      tx = Math.cos(a) * d; ty = Math.sin(a) * d;
+    }
+    st.tx = tx; st.ty = ty;
+    st.next = rand(0.35, 2.2) / S.g.wander;
+  }
+
+  function update(dt) {
+    // voices
+    voices.forEach(v => {
+      v.kick *= Math.exp(-dt * 6);
+      if (v === voices[6]) { lyricStep(v, dt); return; }
+      if ((v.playing || v.live) && v.an) v.analyse(dt);
+      else if (testTalk) v.fakeStep(dt);
+      else { v.lvl = 0; v.wf = 1; }
+    });
+
+    checkAutoStart();
+
+    infoT -= dt;
+    if (infoT <= 0) { infoT = 0.3; refreshTempoInfo(); refreshSrcInfo(); refreshLyricInfo(); }
+
+    // speaking turns, worked out separately for each source
+    for (let vi = 0; vi < voices.length; vi++) {
+      const members = [0, 1, 2].filter(i => isOn(i) && vIdx(i) === vi);
+      const tn = turn[vi];
+      if (!S.g.turns || members.length < 2) { tn.sp = -1; continue; }
+      if (!members.includes(tn.sp)) tn.sp = members[Math.floor(Math.random() * members.length)];
+      if (voices[vi].lvl > 0.1) { tn.spoke = true; tn.silence = 0; }
+      else {
+        tn.silence += dt;
+        if (tn.spoke && tn.silence > 0.5) {
+          const others = members.filter(i => i !== tn.sp);
+          tn.sp = others[Math.floor(Math.random() * others.length)];
+          tn.spoke = false;
+        }
+      }
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const st = P[i];
+
+      // mouth: follows this pumpkin's own source, unless it is waiting its turn on a shared one
+      let target = 0, twf = 1, tpk = 0;
+      if (isOn(i)) {
+        const vi = vIdx(i), tn = turn[vi];
+        if (tn.sp < 0 || tn.sp === i) {
+          target = voices[vi].lvl; twf = voices[vi].wf; tpk = voices[vi].pk || 0;
+          if (vi === 6) {   // lyric mouths follow the real loudness of the feed a little
+            const fv = lyricFeed();
+            if (fv && (fv.playing || fv.live)) target *= (1 - S.g.lyricLoud) + S.g.lyricLoud * clamp(fv.lvl * 1.3, 0, 1);
+          }
+        }
+      }
+      const rate = target > st.open ? 38 : 14;
+      st.open += (target - st.open) * (1 - Math.exp(-dt * rate));
+      st.wf += (twf - st.wf) * (1 - Math.exp(-dt * 10));
+      st.pk += (tpk - st.pk) * (1 - Math.exp(-dt * 14));
+
+      // eyes
+      st.next -= dt;
+      if (st.next <= 0) newTarget(i);
+      const k = 1 - Math.exp(-dt * 16);
+      st.gx += (st.tx - st.gx) * k;
+      st.gy += (st.ty - st.gy) * k;
+
+      // candle flame: slow wobble plus quick flutters and the odd brief gutter
+      const fk = S.g.flicker;
+      st.flT -= dt;
+      if (st.flT <= 0) {
+        st.flT = rand(0.05, 0.16);
+        st.flTarget = 1 - Math.random() * 0.3 * fk;
+        if (Math.random() < 0.04 * fk) st.flTarget = 1 - 0.45 * fk;
+        st.fxT = rand(-1, 1); st.fyT = rand(-1, 1);
+      }
+      st.fl += (st.flTarget - st.fl) * (1 - Math.exp(-dt * 16));
+      st.fx += (st.fxT - st.fx) * (1 - Math.exp(-dt * 5));
+      st.fy += (st.fyT - st.fy) * (1 - Math.exp(-dt * 5));
+
+      // dance: bounce and sway on each low-frequency beat
+      const bv = vIdx(i) === 6 ? (lyricFeed() || voices[6]) : voices[vIdx(i)];
+      const sn = S.g.snap;
+      if (bv.beats !== st.lastBeat) {
+        st.lastBeat = bv.beats;
+        st.vy = -480 * S.g.bob * S.g.hop * sn;
+        st.dir = -st.dir;
+        st.vta = st.dir * 140 * S.g.bob * S.g.sway * sn;
+      }
+      const w2 = 220 * sn * sn, cd = 16 * sn;
+      st.vy += (-w2 * st.by - cd * st.vy) * dt; st.by += st.vy * dt;
+      st.vta += (-w2 * st.ta - cd * st.vta) * dt; st.ta += st.vta * dt;
+
+      // blink
+      if (st.blinkP >= 0) {
+        st.blinkP += dt / 0.2;
+        if (st.blinkP >= 1) { st.blinkP = -1; st.blinkT = rand(2, 6); }
+      } else if (S.g.blink) {
+        st.blinkT -= dt;
+        if (st.blinkT <= 0) st.blinkP = 0;
+      }
+    }
+  }
+
+  /* ---------- timed lyrics ---------- */
+  // The page never fetches lyrics. It only reads text the user pastes in, turns each syllable into a mouth shape,
+  // and plays those shapes on its own clock.
+  const lyr = { events: [], lines: 0, lineTimes: [], running: false, startPerf: 0, base: 0, armed: false, fnudge: 0 };
+  const VIS = {
+    a: { open: 0.85, wf: 1.10, pk: 0 },
+    e: { open: 0.42, wf: 1.20, pk: 0 },
+    i: { open: 0.30, wf: 1.22, pk: 0 },
+    o: { open: 0.65, wf: 0.92, pk: 0.9 },
+    u: { open: 0.38, wf: 0.84, pk: 1 },
+    n: { open: 0.55, wf: 1.00, pk: 0.15 }
+  };
+  const smooth01 = x => { const u = clamp(x, 0, 1); return u * u * (3 - 2 * u); };
+  function parseTime(str) {
+    const parts = String(str || '').trim().split(':').map(Number);
+    if (!parts.length || parts.some(isNaN)) return 0;
+    return parts.reduce((acc, p) => acc * 60 + p, 0);
+  }
+  function fmtClock(t) {
+    const x = Math.max(0, t), m = Math.floor(x / 60);
+    return m + ':' + (x % 60).toFixed(1).padStart(4, '0');
+  }
+  function vowelOf(g) {
+    if (/oo|ou|ue|ew|ui/.test(g)) return 'u';
+    if (g[0] === 'o') return 'o';
+    if (/ee|ea|ie|ei|ey/.test(g)) return 'e';
+    if (g === 'u') return 'n';
+    if (g[0] === 'y') return 'i';
+    return 'aeiu'.includes(g[0]) ? g[0] : 'a';
+  }
+  // rough syllable split: one syllable per group of vowels, dropping a silent final e
+  function syllables(word) {
+    const w = word.toLowerCase().replace(/[^a-z]/g, '');
+    if (!w) return [];
+    const re = /[aeiouy]+/g, kept = [];
+    let m;
+    while ((m = re.exec(w))) kept.push({ g: m[0], i: m.index });
+    if (kept.length > 1 && w.endsWith('e') && kept[kept.length - 1].g === 'e' && !/[^aeiouy]le$/.test(w)) kept.pop();
+    if (!kept.length) return [{ v: 'n', bil: /^[bmp]/.test(w) }];
+    return kept.map(k => ({ v: vowelOf(k.g), bil: k.i > 0 && 'bmp'.includes(w[k.i - 1]) }));
+  }
+  function buildLyrics() {
+    const rows = String(S.g.lyrics || '').split(/\r?\n/);
+    const re = /^\s*((?:\[\d+:\d+(?:[.:]\d+)?\]\s*)+)(.*)$/, tag = /\[(\d+):(\d+(?:[.:]\d+)?)\]/g;
+    const stamped = [], plain = [];
+    rows.forEach(r => {
+      const m = re.exec(r);
+      if (m) {
+        const text = m[2].trim();
+        let t;
+        tag.lastIndex = 0;
+        while ((t = tag.exec(m[1]))) stamped.push({ t: parseInt(t[1], 10) * 60 + parseFloat(t[2].replace(':', '.')), text });
+      } else if (r.trim() && !/^\[[a-z]+:.*\]$/i.test(r.trim())) plain.push(r.trim());
+    });
+    const lines = (stamped.length ? stamped : plain.map((text, i) => ({ t: i * S.g.lgap, text }))).sort((a, b) => a.t - b.t);
+    const ev = [], sung = [];
+    lines.forEach((ln, j) => {
+      if (!ln.text) return;
+      const words = ln.text.split(/\s+/).map(syllables).filter(w => w.length);
+      const total = words.reduce((a, w) => a + w.length, 0);
+      if (!total) return;
+      sung.push(ln.t);
+      const next = lines[j + 1] ? lines[j + 1].t : ln.t + 5;
+      const slot = Math.max(0.3, next - ln.t);
+      const dur = Math.min(slot * 0.95, total * S.g.sylLen + 0.1);
+      const per = dur / total;
+      let k = 0;
+      words.forEach(w => w.forEach((sy, n) => {
+        const t0 = ln.t + k * per;
+        ev.push({ t0, t1: t0 + per * (n === w.length - 1 ? 0.82 : 0.98), v: sy.v, bil: sy.bil });
+        k++;
+      }));
+    });
+    lyr.events = ev; lyr.lineTimes = sung; lyr.lines = sung.length;
+  }
+  // when the shared MP3 is the feed and is playing on this page, the clock simply follows its position (pauses and skips included)
+  const followOn = () => !!(S.g.followMp3 && S.g.lyricFeed === 'shared' && actx && voices[0].playing && voices[0].buffer);
+  const mp3Pos = () => { const v = voices[0]; let p = actx.currentTime - v.startedAt; if (p > v.buffer.duration) p %= v.buffer.duration; return p; };
+  const lyrRunning = () => followOn() || lyr.running;
+  const lyrTime = () => followOn() ? mp3Pos() + lyr.fnudge : (lyr.running ? lyr.base + (performance.now() - lyr.startPerf) / 1000 : lyr.base);
+  function lyrStart() { buildLyrics(); lyr.base = parseTime(S.g.lstart); lyr.startPerf = performance.now(); lyr.running = true; lyr.armed = false; }
+  function lyrPause() {
+    if (lyr.running) { lyr.base = lyrTime(); lyr.running = false; }
+    else { lyr.startPerf = performance.now(); lyr.running = true; }
+  }
+  function lyrStop() { lyr.running = false; lyr.armed = false; lyr.base = parseTime(S.g.lstart); }
+  function lyrNudge(d) { if (followOn()) lyr.fnudge += d; else lyr.base += d; }
+  // Wait for sound: once armed, the first real sound from the shared MP3, tab audio, the microphone (or an MP3 for a pumpkin)
+  // starts the lyric clock at the start point. Two frames in a row above the level are needed, so a click or pop does not trigger it.
+  let armedHits = 0;
+  const lyricFeed = () => ({ shared: voices[0], tab: voices[4], mic: voices[5] })[S.g.lyricFeed] || null;
+  const heardLevel = () => { const fv = lyricFeed(); if (fv) return (fv.playing || fv.live) && fv.an ? fv.rms : 0; let m = 0; voices.forEach((v, i) => { if (i !== 6 && (v.playing || v.live) && v.an && v.rms > m) m = v.rms; }); return m; };
+  function checkAutoStart() {
+    if (!lyr.armed) return;
+    armedHits = heardLevel() > S.g.autoLevel ? armedHits + 1 : 0;
+    if (armedHits >= 2) { armedHits = 0; lyrStart(); refreshLyricInfo(); refreshSrcInfo(); }
+  }
+  function lyricStep(v, dt) {
+    if (!lyrRunning() && testTalk) { v.fakeStep(dt); return; }
+    let lvl = 0, wf = 1, pk = 0;
+    const ev = lyr.events;
+    if (lyrRunning() && ev.length) {
+      const T = lyrTime();
+      let lo = 0, hi = ev.length - 1, idx = -1;
+      while (lo <= hi) { const mid = (lo + hi) >> 1; if (ev[mid].t0 <= T) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
+      if (idx >= 0 && T < ev[idx].t1) {
+        const e = ev[idx], p = (T - e.t0) / (e.t1 - e.t0);
+        let env = Math.pow(Math.sin(Math.PI * clamp(p, 0, 1)), 0.6);
+        if (e.bil) env *= smooth01((p - 0.12) / 0.3);   // lips meet before the sound
+        const z = VIS[e.v] || VIS.n;
+        lvl = z.open * env; wf = 1 + (z.wf - 1) * env; pk = z.pk * env;
+      }
+    }
+    v.lvl = lvl; v.wf = wf; v.pk = pk;
+  }
+  function refreshLyricInfo() {
+    const el = $('lyrInfo');
+    if (!el) return;
+    const T = lyrTime();
+    let t = 'Song time ' + fmtClock(T);
+    if (lyr.lines) {
+      let n = 0;
+      for (let i = 0; i < lyr.lineTimes.length; i++) if (lyr.lineTimes[i] <= T) n = i + 1;
+      t += ', line ' + n + ' of ' + lyr.lines;
+    } else t += ', no lyrics loaded';
+    if (followOn()) t += ', following the MP3';
+    else if (lyr.running) t += ', running';
+    else if (lyr.armed) {
+      const fv = lyricFeed(), live = fv ? !!((fv.playing || fv.live) && fv.an) : voices.some((v, i) => i !== 6 && (v.playing || v.live) && v.an);
+      t += live ? ', waiting for the first sound (hearing ' + Math.round(heardLevel() * 100) + '%)' : ', waiting for the first sound (no sound source is active yet)';
+    } else t += ', stopped';
+    if (el.textContent !== t) el.textContent = t;
+    const pb = $('lpause'), lab = lyrRunning() ? 'Pause' : 'Resume';
+    if (pb.textContent !== lab) pb.textContent = lab;
+  }
+
+  /* ---------- drawing ---------- */
+  // Eye styles with a moving notch-pupil are a plain outline plus a pointed notch that slides around the rim.
+  const BASE = { skull: 'lens', nround: 'round', noval: 'tall', nangry: 'angry', nlidded: 'lidded', ngoggle: 'goggle', ntri: 'triangle' };
+  function eyePath(style, c = ctx) {
+    c.beginPath();
+    switch (style) {
+      case 'round': c.ellipse(0, 0, 52, 48, 0, 0, TAU); break;
+      case 'tall': c.ellipse(0, 0, 36, 62, 0, 0, TAU); break;
+      case 'goggle': c.ellipse(0, 0, 44, 58, 0, 0, TAU); break;
+      case 'angry':
+        c.moveTo(-56, -40); c.lineTo(56, -4); c.lineTo(44, 46); c.lineTo(-48, 40); c.closePath(); break;
+      case 'lens':
+        c.moveTo(-62, 10);
+        c.quadraticCurveTo(-48, -36, 0, -36);
+        c.quadraticCurveTo(52, -34, 62, 8);
+        c.quadraticCurveTo(0, 90, -62, 10);
+        c.closePath(); break;
+      case 'lidded':
+        // flat, slanted top like a heavy eyelid over a rounded lower edge
+        c.moveTo(-60, -28); c.lineTo(58, -6);
+        c.quadraticCurveTo(44, 54, -6, 48);
+        c.quadraticCurveTo(-52, 42, -60, -28);
+        c.closePath(); break;
+      default:
+        c.moveTo(0, -56); c.lineTo(58, 46); c.lineTo(-58, 46); c.closePath();
+    }
+  }
+  // distance from a centre point to the outline in 360 directions, measured once per shape
+  const EYE_CENTER = { lens: [0, 6], round: [0, 0], tall: [0, 0], angry: [0, 2], lidded: [0, 10], goggle: [0, 0], triangle: [0, 14] };
+  const RAYS = 360, radiiCache = {};
+  function eyeRadii(style) {
+    if (radiiCache[style]) return radiiCache[style];
+    const cv = document.createElement('canvas'); cv.width = cv.height = 400;
+    const g = cv.getContext('2d');
+    g.translate(200, 200);
+    eyePath(style, g);
+    const [cx, cy] = EYE_CENTER[style] || [0, 0], rs = [];
+    for (let i = 0; i < RAYS; i++) {
+      const a = i / RAYS * TAU, ca = Math.cos(a), sa = Math.sin(a);
+      let lo = 0, hi = 140;
+      for (let k = 0; k < 9; k++) { const mid = (lo + hi) / 2; if (g.isPointInPath(200 + cx + mid * ca, 200 + cy + mid * sa)) lo = mid; else hi = mid; }
+      rs.push(lo);
+    }
+    return (radiiCache[style] = { rs, cx, cy });
+  }
+  function radiusAt(t, a) {
+    const f = (((a % TAU) + TAU) % TAU) / TAU * RAYS, i = Math.floor(f) % RAYS, u = f - Math.floor(f);
+    return t.rs[i] * (1 - u) + t.rs[(i + 1) % RAYS] * u;
+  }
+  // The pupil is a pointed notch cut into the rim, pointing at the middle of the eye, at the angle the eye is looking.
+  // It is part of the outline, so it is just dark pumpkin wall that stays attached to the outside edge.
+  function notchedPath(style, gx, gy) {
+    const t = eyeRadii(style);
+    const m = Math.min(1, Math.hypot(gx, gy)), ps = S.g.pupilSize || 1;
+    const phi = Math.atan2(gy, gx || 1e-6);
+    const depth = Math.min(0.85, (0.3 + 0.18 * m) * ps), half = 0.23 * Math.min(1.5, ps);
+    const angles = [];
+    for (let i = 0; i < RAYS; i++) angles.push(i / RAYS * TAU);
+    for (const a of [phi - half, phi, phi + half]) angles.push(((a % TAU) + TAU) % TAU);
+    angles.sort((a, b) => a - b);
+    ctx.beginPath();
+    angles.forEach((a, i) => {
+      let d = (((a - phi) % TAU) + TAU) % TAU; if (d > Math.PI) d = TAU - d;
+      const r = radiusAt(t, a) * (1 - depth * Math.max(0, 1 - d / half));
+      const x = t.cx + r * Math.cos(a), y = t.cy + r * Math.sin(a);
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    });
+    ctx.closePath();
+  }
+
+  let glowPx = 0, curFl = 1, curFx = 0, curFy = 0;
+  const hexToRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const rgb = (c, a = 1) => 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+  let palKey = '', PAL = null;
+  function pal() {
+    if (palKey !== S.g.color || !PAL) {
+      palKey = S.g.color;
+      const c = hexToRgb(S.g.color);
+      PAL = { core: mix(c, [255, 250, 225], 0.6), mid: c, edge: mix(c, [200, 70, 0], 0.55), deep: mix(c, [120, 30, 0], 0.7) };
+    }
+    return PAL;
+  }
+  // hot centre toward the candle, deeper orange toward the far edge, plus a warm halo
+  function lit(gx = 0, gy = 0, r = 60) {
+    const a = S.g.candle, P = pal();
+    ctx.globalAlpha = curFl;
+    if (a <= 0.001) { ctx.fillStyle = S.g.color; ctx.shadowColor = S.g.color; ctx.shadowBlur = glowPx; return; }
+    const g = ctx.createRadialGradient(gx + curFx * r * 0.12, gy + curFy * r * 0.12, 0, gx, gy, r);
+    g.addColorStop(0, rgb(mix(P.mid, P.core, a)));
+    g.addColorStop(0.4, rgb(P.mid));
+    g.addColorStop(0.75, rgb(mix(P.mid, P.edge, a)));
+    g.addColorStop(1, rgb(mix(P.mid, P.deep, a)));
+    ctx.fillStyle = g;
+    ctx.shadowColor = rgb(mix(P.mid, P.edge, a * 0.9));
+    ctx.shadowBlur = glowPx * (1 + 0.6 * a);
+  }
+  // darker inner edge, like the thickness of the pumpkin wall around a cut-out (call while clipped)
+  function rim(w = 16) {
+    if (S.g.candle <= 0.001) return;
+    ctx.lineWidth = w; ctx.lineJoin = 'miter'; ctx.miterLimit = 4;
+    ctx.strokeStyle = rgb(pal().edge, 0.55 * S.g.candle);
+    ctx.stroke();
+  }
+
+  function drawEye(x, side, p, st) {
+    const es = p.eyeSize;
+    const blink = st.blinkP >= 0 ? 1 - 0.95 * Math.sin(Math.PI * st.blinkP) : 1;
+    const base = BASE[p.eyeStyle] || p.eyeStyle;
+    const hasP = S.g.pupils || !!BASE[p.eyeStyle];
+    ctx.save();
+    // eyes with a notch-pupil keep their outline while the notch slides around the rim; plain eyes drift a little instead
+    ctx.translate(x + (hasP ? 0 : st.gx * 12), -55 + (hasP ? 0 : st.gy * 8));
+    ctx.scale(side * es, es * blink);
+    const trace = () => hasP ? notchedPath(base, st.gx * side, st.gy) : eyePath(base);
+    lit(24 + st.gx * side * 28, 16 + st.gy * 18, 82); trace(); ctx.fill();
+    ctx.save();
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    trace(); ctx.clip(); rim(16);
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // The mouth outline itself carries the teeth: triangular points cut into the lit shape,
+  // so they are simply unlit pumpkin wall that blends with the dark around it (no black shapes painted on top).
+  // dir: teeth are {c: centre x, w: half width at the base, h: height, b: point sharpness}
+  function mouthShape(hw, yT, yB, topTeeth, botTeeth, N = 40) {
+    const keys = new Set();
+    for (let i = 0; i <= N; i++) keys.add(+(-hw * Math.cos(Math.PI * i / N)).toFixed(3));
+    for (const th of topTeeth.concat(botTeeth)) {
+      const b = th.b || 1.6;
+      for (const k of [th.c - th.w, th.c + th.w, th.c - th.w * (1 - 1 / b), th.c + th.w * (1 - 1 / b), th.c]) if (k >= -hw && k <= hw) keys.add(+k.toFixed(3));
+    }
+    const xs = Array.from(keys).sort((a, b) => a - b);
+    const bump = (x, teeth) => { let o = 0; for (const th of teeth) o += th.h * clamp((1 - Math.abs(x - th.c) / th.w) * (th.b || 1.6), 0, 1); return o; };
+    const top = [], bot = [];
+    for (const x of xs) {
+      const t = clamp(x / hw, -1, 1);
+      const yt = yT(t) + bump(x, topTeeth);
+      top.push([x, yt]); bot.push([x, Math.max(yB(t) - bump(x, botTeeth), yt + 0.5)]);
+    }
+    ctx.beginPath();
+    top.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    for (let i = bot.length - 1; i >= 0; i--) ctx.lineTo(bot[i][0], bot[i][1]);
+    ctx.closePath();
+  }
+  function litMouth(gy, gr, rimW, inside) {
+    lit(0, gy, gr); ctx.fill();
+    ctx.save();
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.clip(); rim(rimW);
+    if (inside) inside();
+    ctx.restore();
+  }
+  function tongue(open, pk, y, w) {
+    if (open <= 0.3) return;
+    ctx.globalAlpha = 0.55 * smooth01((open - 0.3) / 0.4);
+    ctx.fillStyle = rgb(pal().deep);
+    ctx.beginPath(); ctx.ellipse(0, y, w * (1 - 0.3 * pk), 20 + 12 * open, 0, 0, TAU); ctx.fill();
+  }
+
+  // smile that pulls inward and rounds into an "O" as it opens
+  function mouthSmile(open, wf, pk = 0) {
+    const rd = S.g.round;
+    const ss = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+    const m = Math.max(ss(0.08, 0.7, open), pk) * rd;
+    const hw = 150 * wf * (1 - 0.48 * rd * Math.pow(open, 0.7)) * (1 - 0.3 * pk * rd), base = 62, curve = 28;
+    const ry = 10 + 68 * open, cy = 92 + ry * 0.75;
+    const lerp = (a, b, u) => a + (b - a) * u;
+    const yTop = t => { const k = 1 - t * t; return lerp(base + curve * k, cy - ry * Math.sqrt(k), m); };
+    const yBot = t => {
+      const k = 1 - t * t;
+      return lerp(base + curve * k + 14 * k + open * 70 * Math.pow(k, 0.7), cy + ry * Math.sqrt(k), m);
+    };
+    const f = Math.min(1, open * 2.4) * (1 - 0.55 * m), tw = hw / 150;
+    const topT = f > 0.05 ? [-0.62, 0, 0.62].map(t => ({ c: t * hw, w: 22 * tw, h: 30 * f })) : [];
+    const botT = f > 0.05 ? [-0.31, 0.31].map(t => ({ c: t * hw, w: 20 * tw, h: 26 * f })) : [];
+    mouthShape(hw, yTop, yBot, topT, botT, 48);
+    litMouth(lerp(97, cy, m), 100 + hw * 0.6, 6 + open * 10);
+  }
+  // wide cartoon grin: two pointed teeth hang from the top lip, the jaw drops into a bowl with a tongue
+  function mouthBowl(open, wf, pk) {
+    const hw = 165 * wf * (1 - 0.25 * pk - 0.1 * open);
+    const yT = t => 66 + 34 * (1 - t * t);
+    const yB = t => { const k = 1 - t * t; return yT(t) + 32 * k + 82 * open * Math.pow(k, 0.6); };
+    const h = 18 + 14 * open;
+    mouthShape(hw, yT, yB, [{ c: -22, w: 17, h, b: 1.3 }, { c: 22, w: 17, h, b: 1.3 }], []);
+    litMouth(110 + 30 * open, 150, 8 + open * 6, () => tongue(open, pk, yB(0) - 20, 58));
+  }
+  // smaller grin with two big front teeth that stay put while the jaw moves
+  function mouthBuck(open, wf, pk) {
+    const hw = 135 * wf * (1 - 0.25 * pk - 0.1 * open);
+    const yT = t => 72 + 26 * (1 - t * t);
+    const yB = t => { const k = 1 - t * t; return yT(t) + 28 * k + 70 * open * Math.pow(k, 0.6); };
+    const h = 20 + 14 * open;
+    mouthShape(hw, yT, yB, [{ c: -21, w: 17, h, b: 1.25 }, { c: 21, w: 17, h, b: 1.25 }], []);
+    litMouth(105 + 25 * open, 125, 7 + open * 5, () => tongue(open, pk, yB(0) - 18, 44));
+  }
+  // wide mouth with a row of pointed teeth top and bottom that interlock like a zipper
+  function mouthTeeth(open, wf, pk) {
+    const hw = 178 * wf * (1 - 0.2 * pk - 0.08 * open);
+    const yT = t => 82 + 14 * (1 - t * t);
+    const yB = t => { const k = 1 - t * t; return yT(t) + 46 * Math.pow(k, 0.3) + 80 * open * Math.pow(k, 0.5); };
+    const n = 6, sp = 2 * hw / (n + 1), top = [], bot = [];
+    const ends = c => 0.35 + 0.65 * (1 - (c / hw) * (c / hw));
+    for (let j = 1; j <= n; j++) { const c = -hw + j * sp; top.push({ c, w: sp * 0.5, h: ((j % 2 ? 24 : 20) + 6 * open) * ends(c), b: 1.4 }); }
+    for (let j = 1; j < n; j++) { const c = -hw + (j + 0.5) * sp; bot.push({ c, w: sp * 0.5, h: ((j % 2 ? 17 : 21) + 4 * open) * ends(c), b: 1.4 }); }
+    mouthShape(hw, yT, yB, top, bot, 24);
+    litMouth(110 + 30 * open, 160, 6 + open * 6);
+  }
+  // classic jagged jack-o-lantern mouth
+  function mouthZig(open, wf, pk) {
+    const hw = 170 * wf * (1 - 0.25 * pk - 0.1 * open);
+    const yT = t => 66 + 30 * (1 - t * t);
+    const yB = t => { const k = 1 - t * t; return yT(t) + 30 * k + 88 * open * Math.pow(k, 0.55); };
+    const M = 10;
+    ctx.beginPath();
+    for (let i = 0; i <= M; i++) { const t = -1 + 2 * i / M, k = 1 - t * t, y = yT(t) + (i % 2 ? 20 * k : 0); i ? ctx.lineTo(t * hw, y) : ctx.moveTo(t * hw, y); }
+    for (let i = M; i >= 0; i--) { const t = -1 + 2 * i / M, k = 1 - t * t; ctx.lineTo(t * hw, yB(t) - (i % 2 ? 0 : 18 * k)); }
+    ctx.closePath();
+    litMouth(105 + 25 * open, 150, 7 + open * 5);
+  }
+  // simple round "oh" mouth
+  function mouthOval(open, wf, pk) {
+    const rx = (78 - 26 * open) * wf * (1 - 0.25 * pk), ry = 7 + 84 * open, cy = 100 + ry * 0.55;
+    ctx.beginPath(); ctx.ellipse(0, cy, rx, ry, 0, 0, TAU);
+    litMouth(cy, 110, 6 + open * 8, () => tongue(open, pk, cy + ry * 0.5, rx * 0.6));
+  }
+  const MOUTHS = { smile: mouthSmile, bowl: mouthBowl, buck: mouthBuck, teeth: mouthTeeth, zigzag: mouthZig, oval: mouthOval };
+  function drawMouth(open, wf, pk, style) { (MOUTHS[style] || mouthSmile)(open, wf, pk || 0); }
+
+  function drawPumpkin(i) {
+    const p = S.p[i], st = P[i];
+    const base = Math.min(0.9 * (W / 3) / 350, 0.8 * H / 330);
+    const s = base * p.size;
+    glowPx = S.g.glow * 24 * s * DPR;
+    curFl = st.fl; curFx = st.fx * S.g.flicker; curFy = st.fy * S.g.flicker;
+    ctx.save();
+    const sy = clamp(1 - st.by * 0.004, 0.7, 1.3), sx = 1 / sy;
+    ctx.translate(p.x * W, p.y * H + st.by * s);
+    ctx.rotate((p.tilt + st.ta) * Math.PI / 180);
+    ctx.scale(s * sx, s * sy);
+    ctx.translate(0, -49);
+
+    if (S.g.candle > 0.001) {
+      // faint warm light spilling onto the pumpkin skin around the face
+      const hg = ctx.createRadialGradient(0, 40, 10, 0, 40, 250);
+      hg.addColorStop(0, rgb(pal().edge, 0.13 * S.g.candle * st.fl));
+      hg.addColorStop(1, rgb(pal().edge, 0));
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      ctx.fillStyle = hg;
+      ctx.fillRect(-300, -220, 600, 520);
+    }
+
+    drawEye(-110, 1, p, st);
+    drawEye(110, -1, p, st);
+    if (S.g.nose && p.nose !== 'none') {
+      lit(0, 32, 40);
+      ctx.beginPath();
+      if (p.nose === 'rounded') {
+        ctx.moveTo(0, 6); ctx.quadraticCurveTo(11, 14, 21, 34); ctx.quadraticCurveTo(0, 44, -21, 34); ctx.quadraticCurveTo(-11, 14, 0, 6);
+      } else {
+        ctx.moveTo(0, 8); ctx.lineTo(17, 36); ctx.lineTo(-17, 36);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+    drawMouth(st.open, st.wf, st.pk, p.mouthStyle);
+
+    if (S.g.align) {
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      ctx.lineWidth = 2 / s; ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.setLineDash([10 / s * 2, 8 / s * 2]);
+      ctx.beginPath(); ctx.ellipse(0, 49, 185, 175, 0, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-200, 49); ctx.lineTo(200, 49); ctx.moveTo(0, -130); ctx.lineTo(0, 230); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = (28) + 'px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(String(i + 1), 0, 262);
+    }
+    ctx.restore();
+  }
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+    last = now;
+    update(dt);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 3; i++) if (isOn(i)) drawPumpkin(i);
+    requestAnimationFrame(frame);
+  }
+  let last = performance.now();
+
+  /* ---------- UI ---------- */
+  const statusEl = $('status');
+  const say = msg => { statusEl.textContent = msg || ''; };
+
+  function fmtDur(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return m + ':' + String(s).padStart(2, '0'); }
+
+  function refreshButtons() {
+    $('play').textContent = relevantVoices().some(v => v.playing) ? 'Pause' : 'Play';
+    $('test').setAttribute('aria-pressed', String(testTalk));
+    $('livetabstop').hidden = !voices[4].live; $('livemicstop').hidden = !voices[5].live;
+    refreshSrcInfo();
+  }
+
+  const PCTRL = [
+    ['sx', 'x', v => Math.round(v * 100) + '%'], ['sy', 'y', v => Math.round(v * 100) + '%'],
+    ['ssize', 'size', v => v.toFixed(2) + 'x'], ['stilt', 'tilt', v => v.toFixed(1) + '\u00b0'],
+    ['seye', 'eyeSize', v => v.toFixed(2) + 'x']
+  ];
+  function refreshSliders() {
+    [0, 1, 2].forEach(i => {
+      const p = S.p[i];
+      PCTRL.forEach(([id, key, fmt]) => { $(id + '-' + i).value = p[key]; $('o-' + id + '-' + i).textContent = fmt(p[key]); });
+      $('estyle-' + i).value = p.eyeStyle; $('mstyle-' + i).value = p.mouthStyle; $('nstyle-' + i).value = p.nose;
+    });
+  }
+
+  let infoT = 0;
+  const DANCE_CTRL = [
+    ['hop', 'hop', v => Math.round(v * 100) + '%'],
+    ['sway', 'sway', v => Math.round(v * 100) + '%'],
+    ['snap', 'snap', v => v.toFixed(2) + 'x'],
+    ['beatgap', 'beatGap', v => Math.round(v * 1000) + ' ms'],
+    ['basslo', 'bassLo', v => Math.round(v) + ' Hz'],
+    ['basshi', 'bassHi', v => Math.round(v) + ' Hz']
+  ];
+  function refreshTempoInfo() {
+    const el = $('tempoInfo');
+    let t = '';
+    if (S.g.tempoLock) {
+      const vs = [...new Set([0, 1, 2].filter(isOn).map(vIdx))].filter(vi => vi !== 6).map(vi => voices[vi]);
+      t = 'Tempo: ' + vs.map(v => v.tempo ? Math.round(60 / v.tempo.period) + ' BPM' : 'finding the beat').join(' / ');
+    }
+    if (el.textContent !== t) el.textContent = t;
+  }
+
+  const SRC_NAME = { shared: 'the shared MP3', file: 'its own MP3', tab: 'tab audio', mic: 'the microphone', lyrics: 'timed lyrics' };
+  function refreshSrcInfo() {
+    const live = [];
+    if (voices[4].live) live.push('tab audio');
+    if (voices[5].live) live.push('microphone');
+    const n = $('n-live');
+    const lt = live.length ? 'Listening to: ' + live.join(' and ') : 'Not listening';
+    if (n.textContent !== lt) n.textContent = lt;
+    const notes = [];
+    [0, 1, 2].forEach(i => {
+      if (!isOn(i)) return;
+      const src = S.p[i].src, v = voices[vIdx(i)];
+      if (src === 'tab' && !v.live) notes.push('Pumpkin ' + (i + 1) + ' is waiting for tab audio. Press Capture tab audio.');
+      else if (src === 'mic' && !v.live) notes.push('Pumpkin ' + (i + 1) + ' is waiting for the microphone. Press Use microphone.');
+      else if (src === 'lyrics' && !lyr.events.length) notes.push('Pumpkin ' + (i + 1) + ' is waiting for lyrics. Paste them under Timed lyrics.');
+      else if (src === 'lyrics' && !lyrRunning()) notes.push('Pumpkin ' + (i + 1) + (lyr.armed ? ' is waiting for the first sound.' : ' is waiting for Start lyrics.'));
+      else if ((src === 'shared' || src === 'file') && !v.buffer) notes.push('Pumpkin ' + (i + 1) + ' has no MP3 loaded for ' + SRC_NAME[src] + '.');
+    });
+    const t = notes.join(' ');
+    const el = $('srcInfo');
+    if (el.textContent !== t) el.textContent = t;
+  }
+
+  function refreshAll() {
+    refreshSliders();
+    const g = S.g;
+    [0, 1, 2].forEach(i => { $('on-' + i).checked = S.p[i].on !== false; $('src-' + i).value = S.p[i].src; });
+    $('turns').checked = g.turns;
+    refreshHowMany(); refreshSrcBlocks();
+    $('remember').checked = g.remember !== false;
+    refreshSetupList();
+    $('lyrics').value = g.lyrics || ''; $('lstart').value = g.lstart;
+    $('lgap').value = g.lgap; $('o-lgap').textContent = g.lgap.toFixed(1) + ' s';
+    $('sylen').value = g.sylLen; $('o-sylen').textContent = Math.round(g.sylLen * 1000) + ' ms';
+    $('autolevel').value = g.autoLevel; $('o-autolevel').textContent = (Math.round(g.autoLevel * 1000) / 10) + '%';
+    $('lfeed').value = g.lyricFeed; $('followmp3').checked = g.followMp3 !== false;
+    $('lloud').value = g.lyricLoud; $('o-lloud').textContent = Math.round(g.lyricLoud * 100) + '%';
+    buildLyrics(); if (!lyr.running) lyr.base = parseTime(g.lstart);
+    $('vol').value = g.volume; $('o-vol').textContent = Math.round(g.volume * 100) + '%';
+    $('sens').value = g.sens; $('o-sens').textContent = g.sens.toFixed(2) + 'x';
+    $('speech').value = g.speech; $('o-speech').textContent = Math.round(g.speech * 100) + '%';
+    $('round').value = g.round; $('o-round').textContent = Math.round(g.round * 100) + '%';
+    $('loop').checked = g.loop;
+    $('color').value = g.color;
+    $('glow').value = g.glow; $('o-glow').textContent = Math.round(g.glow * 100) + '%';
+    $('candle').value = g.candle; $('o-candle').textContent = Math.round(g.candle * 100) + '%';
+    $('flicker').value = g.flicker; $('o-flicker').textContent = Math.round(g.flicker * 100) + '%';
+    $('wander').value = g.wander; $('o-wander').textContent = g.wander.toFixed(2) + 'x';
+    $('bob').value = g.bob; $('o-bob').textContent = Math.round(g.bob * 100) + '%';
+    $('beatsens').value = g.beatSens; $('o-beatsens').textContent = g.beatSens.toFixed(2) + 'x';
+    DANCE_CTRL.forEach(([id, key, fmt]) => { $(id).value = g[key]; $('o-' + id).textContent = fmt(g[key]); });
+    $('tempolock').checked = g.tempoLock;
+    refreshTempoInfo();
+    $('blink').checked = g.blink; $('nose').checked = g.nose; $('pupils').checked = !!g.pupils;
+    $('pupilsize').value = g.pupilSize; $('o-pupilsize').textContent = Math.round(g.pupilSize * 100) + '%'; $('align').checked = g.align;
+    document.body.classList.toggle('panel-right', g.side === 'right');
+    refreshButtons();
+  }
+
+  // per-pumpkin controls (one card for each pumpkin)
+  [0, 1, 2].forEach(i => {
+    PCTRL.forEach(([id, key, fmt]) => {
+      $(id + '-' + i).addEventListener('input', e => {
+        const v = parseFloat(e.target.value);
+        S.p[i][key] = v; $('o-' + id + '-' + i).textContent = fmt(v); save();
+      });
+    });
+    $('estyle-' + i).addEventListener('change', e => { S.p[i].eyeStyle = e.target.value; save(); });
+    $('mstyle-' + i).addEventListener('change', e => { S.p[i].mouthStyle = e.target.value; save(); });
+    $('nstyle-' + i).addEventListener('change', e => { S.p[i].nose = e.target.value; save(); });
+  });
+  $('preset').addEventListener('click', () => {
+    const look = [['skull', 'teeth', 'rounded'], ['lidded', 'bowl', 'triangle'], ['goggle', 'buck', 'none']];
+    look.forEach(([eye, mouth, nose], i) => { S.p[i].eyeStyle = eye; S.p[i].mouthStyle = mouth; S.p[i].nose = nose; S.p[i].eyeSize = 1; });
+    refreshSliders(); save();
+  });
+
+  // global controls
+  $('color').addEventListener('input', e => { S.g.color = e.target.value; save(); });
+  $('glow').addEventListener('input', e => { S.g.glow = parseFloat(e.target.value); $('o-glow').textContent = Math.round(S.g.glow * 100) + '%'; save(); });
+  $('candle').addEventListener('input', e => { S.g.candle = parseFloat(e.target.value); $('o-candle').textContent = Math.round(S.g.candle * 100) + '%'; save(); });
+  $('flicker').addEventListener('input', e => { S.g.flicker = parseFloat(e.target.value); $('o-flicker').textContent = Math.round(S.g.flicker * 100) + '%'; save(); });
+  $('wander').addEventListener('input', e => { S.g.wander = parseFloat(e.target.value); $('o-wander').textContent = S.g.wander.toFixed(2) + 'x'; save(); });
+  $('sens').addEventListener('input', e => { S.g.sens = parseFloat(e.target.value); $('o-sens').textContent = S.g.sens.toFixed(2) + 'x'; save(); });
+  $('bob').addEventListener('input', e => { S.g.bob = parseFloat(e.target.value); $('o-bob').textContent = Math.round(S.g.bob * 100) + '%'; save(); });
+  $('beatsens').addEventListener('input', e => { S.g.beatSens = parseFloat(e.target.value); $('o-beatsens').textContent = S.g.beatSens.toFixed(2) + 'x'; save(); });
+  DANCE_CTRL.forEach(([id, key, fmt]) => {
+    $(id).addEventListener('input', e => { S.g[key] = parseFloat(e.target.value); $('o-' + id).textContent = fmt(S.g[key]); save(); });
+  });
+  $('tempolock').addEventListener('change', e => { S.g.tempoLock = e.target.checked; save(); refreshTempoInfo(); });
+  [0, 1, 2].forEach(i => {
+    $('on-' + i).addEventListener('change', e => { S.p[i].on = e.target.checked; save(); refreshSrcInfo(); refreshHowMany(); refreshSrcBlocks(); });
+    $('src-' + i).addEventListener('change', e => { S.p[i].src = e.target.value; save(); refreshSrcInfo(); refreshSrcBlocks(); });
+  });
+  $('turns').addEventListener('change', e => { S.g.turns = e.target.checked; save(); });
+  $('round').addEventListener('input', e => { S.g.round = parseFloat(e.target.value); $('o-round').textContent = Math.round(S.g.round * 100) + '%'; save(); });
+  $('speech').addEventListener('input', e => { S.g.speech = parseFloat(e.target.value); $('o-speech').textContent = Math.round(S.g.speech * 100) + '%'; save(); });
+  $('vol').addEventListener('input', e => {
+    S.g.volume = parseFloat(e.target.value); $('o-vol').textContent = Math.round(S.g.volume * 100) + '%';
+    if (master) master.gain.value = S.g.volume; save();
+  });
+  $('blink').addEventListener('change', e => { S.g.blink = e.target.checked; save(); });
+  $('nose').addEventListener('change', e => { S.g.nose = e.target.checked; save(); });
+  $('pupils').addEventListener('change', e => { S.g.pupils = e.target.checked; save(); });
+  $('pupilsize').addEventListener('input', e => { S.g.pupilSize = parseFloat(e.target.value); $('o-pupilsize').textContent = Math.round(S.g.pupilSize * 100) + '%'; save(); });
+  $('align').addEventListener('change', e => { S.g.align = e.target.checked; save(); });
+  $('loop').addEventListener('change', e => {
+    S.g.loop = e.target.checked;
+    voices.forEach(v => { if (v.src) v.src.loop = S.g.loop; });
+    save();
+  });
+
+  // audio files
+  [0, 1, 2, 3].forEach(i => {
+    $('f-' + i).addEventListener('change', async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      say('Loading ' + file.name + '...');
+      try {
+        await voices[i].load(file);
+        $('n-' + i).textContent = file.name + ' (' + fmtDur(voices[i].buffer.duration) + ')';
+        say('Ready. Press Play.');
+        lastFiles[i] = { name: file.name, blob: file };
+        rememberFile(i);
+      } catch (err) {
+        voices[i].buffer = null;
+        $('n-' + i).textContent = 'No file loaded';
+        say('That file could not be read as audio. Try another MP3.');
+      }
+      refreshButtons();
+    });
+  });
+
+  /* ---------- saved setups and remembered MP3s ---------- */
+  const lastFiles = {};
+  const SETUPS_KEY = 'pumpkinProjector.setups.v1';
+  const readSetups = () => { try { return JSON.parse(localStorage.getItem(SETUPS_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  const writeSetups = o => { try { localStorage.setItem(SETUPS_KEY, JSON.stringify(o)); return true; } catch (e) { return false; } };
+  const saveSay = msg => { $('saveInfo').textContent = msg || ''; };
+
+  function refreshSetupList(select) {
+    const names = Object.keys(readSetups()).sort((a, b) => a.localeCompare(b));
+    const el = $('setuplist');
+    el.innerHTML = '';
+    if (!names.length) {
+      const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Nothing saved yet'; el.appendChild(opt);
+    }
+    names.forEach(n => { const opt = document.createElement('option'); opt.value = n; opt.textContent = n; el.appendChild(opt); });
+    if (select && names.includes(select)) el.value = select;
+    $('setupload').disabled = $('setupdel').disabled = !names.length;
+  }
+  function applySettings(saved) {
+    if (!saved || !saved.g || !Array.isArray(saved.p) || saved.p.length !== 3) return false;
+    const d = defaults();
+    S = { g: Object.assign(d.g, saved.g), p: saved.p.map((p, i) => Object.assign(d.p[i], p)) };
+    return true;
+  }
+  $('setupsave').addEventListener('click', () => {
+    const name = $('setupname').value.trim().slice(0, 40);
+    if (!name) { saveSay('Type a name for the setup first.'); return; }
+    const o = readSetups(), existed = Object.prototype.hasOwnProperty.call(o, name);
+    o[name] = JSON.parse(JSON.stringify(S));
+    if (!writeSetups(o)) { saveSay('Could not save. This browser may be blocking storage here.'); return; }
+    refreshSetupList(name);
+    saveSay((existed ? 'Updated "' : 'Saved "') + name + '".');
+  });
+  $('setupload').addEventListener('click', () => {
+    const name = $('setuplist').value, o = readSetups();
+    if (!name || !o[name] || !applySettings(o[name])) { saveSay('That setup could not be loaded.'); return; }
+    refreshAll(); save();
+    $('setupname').value = name;
+    saveSay('Loaded "' + name + '".');
+  });
+  $('setupdel').addEventListener('click', () => {
+    const name = $('setuplist').value, o = readSetups();
+    if (!name || !(name in o)) return;
+    delete o[name];
+    writeSetups(o); refreshSetupList();
+    saveSay('Deleted "' + name + '".');
+  });
+
+  // MP3 files are kept in IndexedDB so they are still loaded the next time the page opens
+  function idbOpen() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('pumpkinProjector', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('files');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  async function idbDo(mode, fn) {
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('files', mode);
+      let out;
+      const req = fn(tx.objectStore('files'));
+      if (req) req.onsuccess = () => { out = req.result; };
+      tx.oncomplete = () => { db.close(); res(out); };
+      tx.onerror = tx.onabort = () => { db.close(); rej(tx.error); };
+    });
+  }
+  const idbPut = (k, v) => idbDo('readwrite', st => st.put(v, k));
+  const idbGet = k => idbDo('readonly', st => st.get(k));
+  const idbDel = k => idbDo('readwrite', st => st.delete(k));
+
+  function rememberFile(i) {
+    if (!S.g.remember || !lastFiles[i]) return;
+    idbPut('f-' + i, lastFiles[i])
+      .then(() => saveSay('MP3 remembered in this browser.'))
+      .catch(() => saveSay('This browser would not keep the MP3, so you will need to load it again next time.'));
+  }
+  async function forgetFiles() {
+    try {
+      for (let i = 0; i < 4; i++) await idbDel('f-' + i);
+      saveSay('Forgot the saved MP3s. Files already loaded stay loaded until you reload the page.');
+    } catch (e) { saveSay('Could not clear the saved MP3s.'); }
+  }
+  async function restoreFiles() {
+    if (!S.g.remember) return;
+    let n = 0;
+    for (let i = 0; i < 4; i++) {
+      try {
+        const rec = await idbGet('f-' + i);
+        if (!rec || !rec.blob) continue;
+        await voices[i].load(rec.blob);
+        lastFiles[i] = rec;
+        $('n-' + i).textContent = rec.name + ' (' + fmtDur(voices[i].buffer.duration) + ', remembered)';
+        n++;
+      } catch (e) {}
+    }
+    if (n) { saveSay('Brought back ' + n + ' remembered MP3' + (n > 1 ? 's' : '') + '. Press Play when you are ready.'); refreshButtons(); }
+  }
+  $('remember').addEventListener('change', e => {
+    S.g.remember = e.target.checked; save();
+    if (S.g.remember) { Object.keys(lastFiles).forEach(i => rememberFile(+i)); saveSay('Loaded MP3s will be remembered.'); }
+    else forgetFiles();
+  });
+  $('forget').addEventListener('click', forgetFiles);
+
+  async function goLive(kind) {
+    ensureAudio();
+    const md = navigator.mediaDevices;
+    if (!md || !(kind === 'tab' ? md.getDisplayMedia : md.getUserMedia)) {
+      say(kind === 'tab' ? 'This browser cannot capture tab audio. Try desktop Chrome or Edge.' : 'This browser cannot use the microphone here.');
+      return;
+    }
+    const vi = kind === 'tab' ? 4 : 5;
+    let stream;
+    try {
+      stream = kind === 'tab'
+        ? await md.getDisplayMedia({ video: true, audio: true })
+        : await md.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    } catch (err) {
+      say(err && err.name === 'NotAllowedError'
+        ? 'Permission was denied or blocked. If this page is embedded, open the saved file in its own browser tab, or use the other option.'
+        : 'Could not start listening. Try again, or try the other option.');
+      return;
+    }
+    const track = stream.getAudioTracks()[0];
+    if (!track) {
+      stream.getTracks().forEach(t => t.stop());
+      say('No audio was shared. Choose a Chrome tab and tick the option to share tab audio.');
+      return;
+    }
+    voices[vi].startLive(stream);
+    track.addEventListener('ended', () => {
+      if (voices[vi].live && voices[vi].live.stream === stream) { voices[vi].stopLive(); say('Listening stopped.'); refreshButtons(); }
+    });
+    say(kind === 'tab' ? 'Listening to the tab. Start the video there.' : 'Listening to the microphone.');
+    refreshButtons();
+  }
+  $('livetab').addEventListener('click', () => goLive('tab'));
+  $('livemic').addEventListener('click', () => goLive('mic'));
+  $('livetabstop').addEventListener('click', () => { voices[4].stopLive(); say('Stopped listening to the tab.'); refreshButtons(); });
+  $('livemicstop').addEventListener('click', () => { voices[5].stopLive(); say('Stopped listening to the microphone.'); refreshButtons(); });
+
+  $('play').addEventListener('click', () => {
+    const vs = relevantVoices().filter(v => v.buffer);
+    if (!vs.length) { say('Load an MP3 first, or press Test talk to check your setup.'); return; }
+    say('');
+    ensureAudio();
+    if (vs.some(v => v.playing)) vs.forEach(v => v.pause());
+    else vs.forEach(v => v.play());
+    refreshButtons();
+  });
+  $('stop').addEventListener('click', () => { voices.slice(0, 4).forEach(v => v.stop()); refreshButtons(); say(''); });
+  $('test').addEventListener('click', () => { testTalk = !testTalk; refreshButtons(); });
+
+  // timed lyrics
+  $('lyrics').addEventListener('input', e => { S.g.lyrics = e.target.value.slice(0, 20000); save(); buildLyrics(); });
+  $('lstart').addEventListener('change', e => { S.g.lstart = e.target.value; save(); if (!lyr.running) lyr.base = parseTime(S.g.lstart); });
+  $('lgap').addEventListener('input', e => { S.g.lgap = parseFloat(e.target.value); $('o-lgap').textContent = S.g.lgap.toFixed(1) + ' s'; save(); buildLyrics(); });
+  $('sylen').addEventListener('input', e => { S.g.sylLen = parseFloat(e.target.value); $('o-sylen').textContent = Math.round(S.g.sylLen * 1000) + ' ms'; save(); buildLyrics(); });
+  $('lstartbtn').addEventListener('click', () => { lyrStart(); refreshLyricInfo(); refreshSrcInfo(); });
+  $('lpause').addEventListener('click', () => { lyrPause(); refreshLyricInfo(); refreshSrcInfo(); });
+  $('lstop').addEventListener('click', () => { lyrStop(); refreshLyricInfo(); refreshSrcInfo(); });
+  $('lwait').addEventListener('click', () => { lyr.running = false; lyr.base = parseTime(S.g.lstart); lyr.armed = true; armedHits = 0; refreshLyricInfo(); refreshSrcInfo(); });
+  $('lfeed').addEventListener('change', e => { S.g.lyricFeed = e.target.value; save(); refreshSrcBlocks(); refreshSrcInfo(); });
+  $('followmp3').addEventListener('change', e => { S.g.followMp3 = e.target.checked; save(); });
+  $('lloud').addEventListener('input', e => { S.g.lyricLoud = parseFloat(e.target.value); $('o-lloud').textContent = Math.round(S.g.lyricLoud * 100) + '%'; save(); });
+  $('autolevel').addEventListener('input', e => { S.g.autoLevel = parseFloat(e.target.value); $('o-autolevel').textContent = (Math.round(S.g.autoLevel * 1000) / 10) + '%'; save(); });
+  [['lnm5', -0.5], ['lnm1', -0.1], ['lnp1', 0.1], ['lnp5', 0.5]].forEach(([id, d]) => $(id).addEventListener('click', () => { lyrNudge(d); refreshLyricInfo(); }));
+
+  // panel and fullscreen
+  const setPanel = show => { document.body.classList.toggle('panel-hidden', !show); };
+  const togglePanel = () => setPanel(document.body.classList.contains('panel-hidden'));
+  function toggleFull() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    } catch (e) { say('Fullscreen is not available here. Try your browser menu instead.'); }
+  }
+  $('hide').addEventListener('click', () => setPanel(false));
+  $('side').addEventListener('click', () => {
+    S.g.side = S.g.side === 'right' ? 'left' : 'right';
+    document.body.classList.toggle('panel-right', S.g.side === 'right');
+    save();
+  });
+  $('full').addEventListener('click', toggleFull);
+  $('peek').addEventListener('click', () => setPanel(true));
+  canvas.addEventListener('dblclick', togglePanel);
+  let peekTimer = 0;
+  window.addEventListener('mousemove', () => {
+    const pk = $('peek'); pk.classList.add('show');
+    document.body.classList.remove('idle');
+    clearTimeout(peekTimer);
+    peekTimer = setTimeout(() => { pk.classList.remove('show'); document.body.classList.add('idle'); }, 2500);
+  });
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const tg = e.target;
+    if (tg && (tg.tagName === 'TEXTAREA' || (tg.tagName === 'INPUT' && (tg.type === 'text' || tg.type === 'number')))) return;
+    const k = e.key.toLowerCase();
+    if (k === 'h') togglePanel();
+    else if (k === 'f') toggleFull();
+    else if (e.key === ' ' && e.target === document.body) { e.preventDefault(); $('play').click(); }
+  });
+
+  $('reset').addEventListener('click', () => {
+    stopAll(); S = defaults(); lyr.running = false; lyr.armed = false; refreshAll(); save(); say('Settings reset.');
+  });
+
+  // ---- guided steps ----
+  const UI_KEY = 'pumpkinProjector.ui.v1';
+  const ui = { step: 1 };
+  try { Object.assign(ui, JSON.parse(localStorage.getItem(UI_KEY) || '{}')); } catch (e) {}
+  const saveUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify({ step: ui.step })); } catch (e) {} };
+  function showStep(n) {
+    ui.step = n >= 1 && n <= 4 ? n : 1;
+    document.querySelectorAll('.step').forEach(el => { el.hidden = +el.dataset.step !== ui.step; });
+    document.querySelectorAll('.stepbtn').forEach(b => b.setAttribute('aria-selected', String(+b.dataset.step === ui.step)));
+    $('panelbody').scrollTop = 0;
+    saveUi();
+  }
+  // the "1 / 2 / 3 pumpkins" buttons light up when the pumpkins that are on are exactly the first n
+  function refreshHowMany() {
+    const on = [0, 1, 2].filter(isOn);
+    document.querySelectorAll('.howmany button').forEach(b => {
+      const n = +b.dataset.n;
+      b.setAttribute('aria-pressed', String(on.length === n && on.every((v, k) => v === k)));
+    });
+  }
+  // only the sound setup that a switched-on pumpkin actually uses is shown, and cards only for pumpkins that are on
+  const who = idx => idx.length === 1 ? 'Pumpkin ' + (idx[0] + 1) : 'Pumpkins ' + idx.map(i => i + 1).join(', ').replace(/, (\d)$/, ' and $1');
+  function refreshSrcBlocks() {
+    const on = [0, 1, 2].filter(isOn);
+    const use = { shared: [], file: [], tab: [], mic: [], lyrics: [] };
+    on.forEach(i => (use[S.p[i].src] || use.shared).push(i));
+    const show = (id, yes) => { const el = $(id); if (el) el.hidden = !yes; };
+    const feed = use.lyrics.length ? S.g.lyricFeed : 'none';
+    const label = (id, list, isFeed) => {
+      const t = (list.length ? 'Used by ' + who(list) : '') + (isFeed ? (list.length ? ' and as the' : 'The') + ' sound feed for timed lyrics' : '');
+      $(id).textContent = t;
+    };
+    show('blk-shared', use.shared.length || feed === 'shared'); label('by-shared', use.shared, feed === 'shared');
+    [0, 1, 2].forEach(i => show('blk-file-' + i, use.file.includes(i)));
+    show('blk-tab', use.tab.length || feed === 'tab'); label('by-tab', use.tab, feed === 'tab');
+    show('blk-mic', use.mic.length || feed === 'mic'); label('by-mic', use.mic, feed === 'mic');
+    show('blk-live', use.tab.length || use.mic.length || feed === 'tab' || feed === 'mic');
+    show('blk-lyrics', use.lyrics.length); label('by-lyrics', use.lyrics);
+    show('followRow', use.lyrics.length && S.g.lyricFeed === 'shared');
+    show('loudRow', use.lyrics.length && S.g.lyricFeed !== 'none');
+    show('noSrc', !on.length);
+    show('turnsRow', ['shared', 'tab', 'mic', 'lyrics'].some(k => use[k].length > 1));
+    [0, 1, 2].forEach(i => document.querySelectorAll('.pcard[data-p="' + i + '"]').forEach(el => { el.hidden = !isOn(i); }));
+    document.querySelectorAll('.nocards').forEach(el => { el.hidden = on.length > 0; });
+  }
+  document.querySelectorAll('.stepbtn').forEach(b => b.addEventListener('click', () => showStep(+b.dataset.step)));
+  document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showStep(+b.dataset.go)));
+  document.querySelectorAll('.howmany button').forEach(b => b.addEventListener('click', () => {
+    const n = +b.dataset.n;
+    S.p.forEach((p, i) => { p.on = i < n; $('on-' + i).checked = p.on; });
+    save(); refreshSrcInfo(); refreshHowMany(); refreshSrcBlocks();
+  }));
+  showStep(ui.step);
+
+  refreshAll();
+  requestAnimationFrame(frame);
+  restoreFiles();
+})();
+</script>
+</body>
+</html>
