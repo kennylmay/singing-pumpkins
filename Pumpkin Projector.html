@@ -133,6 +133,7 @@
   .pcard { margin: 12px 0; padding: 4px 12px 10px; border: 1px solid var(--panel-edge); border-radius: 8px; background: rgba(255, 255, 255, 0.02); }
   .pcard h3 { margin-top: 10px; }
   #preset { width: 100%; margin: 6px 0 2px; }
+  .subhead { margin-top: 14px; }
 </style>
 </head>
 <body class="">
@@ -223,7 +224,15 @@
       <p class="hint">The feed makes the dancing follow the beat, lets the mouths follow the real loudness a little, and lets Wait for sound start the lyrics. Set it up in the box that appears below.</p>
       <label class="check" id="followRow"><input type="checkbox" id="followmp3"> Follow the MP3's position, including pauses and skips</label>
       <label class="row" id="loudRow"><span>Follow loudness</span><input type="range" id="lloud" min="0" max="1" step="0.01"><output id="o-lloud"></output></label>
-    <p class="hint">Paste lyrics you have the right to use, one line per row, with a time before each line like [0:12.50]. This page does not include or look up lyrics. Then set a pumpkin's source to Timed lyrics.</p>
+    <h3 class="subhead">Find the lyrics for the MP3</h3>
+      <label class="stack"><span>Artist</span><input type="text" id="lyrArtist" placeholder="Read from the MP3 when you load it" autocomplete="off"></label>
+      <label class="stack"><span>Song title</span><input type="text" id="lyrTitle" autocomplete="off"></label>
+      <div class="btnrow"><button id="lyrFind" type="button">Find lyrics</button></div>
+      <label class="check"><input type="checkbox" id="lyrAuto"> Look up lyrics automatically when I load an MP3</label>
+      <p class="hint" id="lyrFindInfo" role="status"></p>
+      <p class="hint">Lookups use the free LRCLIB database (lrclib.net). Only the artist, title, album and length are sent. They work when the page is opened from your computer and you are online. The hosted preview blocks them, so there you can search lrclib.net yourself and paste the result below.</p>
+      <h3 class="subhead">Or paste lyrics yourself</h3>
+      <p class="hint">Paste lyrics you have the right to use, one line per row, with a time before each line like [0:12.50]. This page does not include or look up lyrics. Then set a pumpkin's source to Timed lyrics.</p>
     <textarea id="lyrics" rows="8" spellcheck="false" placeholder="[0:12.50] Words for the first line&#10;[0:16.00] Words for the second line"></textarea>
     <label class="stack"><span>Start at this point in the song (m:ss)</span><input type="text" id="lstart" value="0:00" inputmode="decimal"></label>
     <label class="row"><span>Line spacing</span><input type="range" id="lgap" min="1" max="10" step="0.5"><output id="o-lgap"></output></label>
@@ -508,7 +517,7 @@
   /* ---------- settings ---------- */
   const KEY = 'pumpkinProjector.v1';
   const defaults = () => ({
-    g: { color: '#ffc933', glow: 0.5, nose: true, wander: 1, blink: true, sens: 1, volume: 0.9, loop: false, align: false, side: 'left', speech: 0.7, bob: 1, beatSens: 1, hop: 1, sway: 1, snap: 1, beatGap: 0.2, bassLo: 40, bassHi: 150, tempoLock: false, turns: true, pupils: false, pupilSize: 1, remember: true, lyrics: '', lstart: '0:00', lgap: 4, sylLen: 0.3, autoLevel: 0.02, lyricFeed: 'shared', lyricLoud: 0.3, followMp3: true, candle: 0.8, flicker: 0.5, round: 1 },
+    g: { color: '#ffc933', glow: 0.5, nose: true, wander: 1, blink: true, sens: 1, volume: 0.9, loop: false, align: false, side: 'left', speech: 0.7, bob: 1, beatSens: 1, hop: 1, sway: 1, snap: 1, beatGap: 0.2, bassLo: 40, bassHi: 150, tempoLock: false, turns: true, pupils: false, pupilSize: 1, remember: true, lyrics: '', lstart: '0:00', lgap: 4, sylLen: 0.3, autoLevel: 0.02, lyricFeed: 'shared', lyricLoud: 0.3, followMp3: true, lyrAuto: true, candle: 0.8, flicker: 0.5, round: 1 },
     p: [
       { x: 1/6, y: 0.5, size: 1, tilt: -4, eyeStyle: 'skull', eyeSize: 1, on: true, src: 'shared', mouthStyle: 'teeth', nose: 'rounded' },
       { x: 3/6, y: 0.5, size: 1, tilt: 0,  eyeStyle: 'lidded',   eyeSize: 1, on: true, src: 'shared', mouthStyle: 'bowl', nose: 'triangle' },
@@ -1083,6 +1092,125 @@
     if (pb.textContent !== lab) pb.textContent = lab;
   }
 
+  /* ---------- finding lyrics for a loaded MP3 ---------- */
+  // Reads the title, artist and album from the MP3's own tags (ID3), then asks the free LRCLIB database for the lyrics.
+  // Nothing is sent except the artist, title, album and length, and only from this browser.
+  function decodeText(b) {
+    if (!b.length) return '';
+    const enc = b[0];
+    let data = b.slice(1), t;
+    if (enc === 1 || enc === 2) {
+      let label = enc === 2 ? 'utf-16be' : 'utf-16le';
+      if (data[0] === 0xff && data[1] === 0xfe) { label = 'utf-16le'; data = data.slice(2); }
+      else if (data[0] === 0xfe && data[1] === 0xff) { label = 'utf-16be'; data = data.slice(2); }
+      t = new TextDecoder(label).decode(data);
+    } else t = new TextDecoder(enc === 3 ? 'utf-8' : 'windows-1252').decode(data);
+    return t.split('\0')[0].trim();
+  }
+  async function readTags(file) {
+    const out = { title: '', artist: '', album: '' };
+    try {
+      const head = new Uint8Array(await file.slice(0, 10).arrayBuffer());
+      if (head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) {   // "ID3"
+        const ver = head[3], flags = head[5];
+        const size = (head[6] << 21) | (head[7] << 14) | (head[8] << 7) | head[9];
+        const buf = new Uint8Array(await file.slice(10, 10 + Math.min(size, 6 * 1024 * 1024)).arrayBuffer());
+        const idLen = ver === 2 ? 3 : 4, hdr = ver === 2 ? 6 : 10;
+        let p = 0;
+        if (flags & 0x40 && ver >= 3) {   // skip an extended header
+          p = ver === 4 ? ((buf[0] << 21) | (buf[1] << 14) | (buf[2] << 7) | buf[3]) : (((buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3]) >>> 0) + 4;
+        }
+        let albumArtist = '';
+        while (p + hdr <= buf.length) {
+          const id = String.fromCharCode(...buf.slice(p, p + idLen));
+          if (!/^[A-Z0-9]{3,4}$/.test(id)) break;   // padding after the last frame
+          let fsize;
+          if (ver === 2) fsize = (buf[p + 3] << 16) | (buf[p + 4] << 8) | buf[p + 5];
+          else if (ver === 4) fsize = (buf[p + 4] << 21) | (buf[p + 5] << 14) | (buf[p + 6] << 7) | buf[p + 7];
+          else fsize = ((buf[p + 4] << 24) | (buf[p + 5] << 16) | (buf[p + 6] << 8) | buf[p + 7]) >>> 0;
+          const body = buf.slice(p + hdr, p + hdr + fsize);
+          p += hdr + fsize;
+          const key = { TIT2: 'title', TT2: 'title', TPE1: 'artist', TP1: 'artist', TALB: 'album', TAL: 'album' }[id];
+          if (key && !out[key]) out[key] = decodeText(body);
+          else if ((id === 'TPE2' || id === 'TP2') && !albumArtist) albumArtist = decodeText(body);
+          if (fsize <= 0) break;
+        }
+        if (!out.artist) out.artist = albumArtist;
+      }
+      if (!out.title) {   // older ID3v1 tags sit in the last 128 bytes
+        const tail = new Uint8Array(await file.slice(Math.max(0, file.size - 128)).arrayBuffer());
+        if (tail.length === 128 && tail[0] === 0x54 && tail[1] === 0x41 && tail[2] === 0x47) {
+          const f = (a, b) => new TextDecoder('windows-1252').decode(tail.slice(a, b)).replace(/\0[\s\S]*$/, '').trim();
+          out.title = f(3, 33); out.artist = out.artist || f(33, 63); out.album = out.album || f(63, 93);
+        }
+      }
+    } catch (e) {}
+    return out;
+  }
+  // when there are no tags, guess from a file name like "Artist - Title.mp3"
+  function tagsFromName(name) {
+    let base = String(name || '').replace(/\.[^.]+$/, '').replace(/_/g, ' ').trim();
+    base = base.replace(/^\d{1,3}[\s.\-_)]+/, '');
+    const parts = base.split(/\s+[-\u2013]\s+/);
+    return parts.length >= 2 ? { artist: parts[0].trim(), title: parts.slice(1).join(' - ').trim() } : { artist: '', title: base };
+  }
+
+  const LRCLIB = 'https://lrclib.net/api';
+  const qs = o => Object.keys(o).filter(k => o[k] !== '' && o[k] != null).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(o[k])).join('&');
+  const hasText = r => r && !r.instrumental && (r.syncedLyrics || r.plainLyrics);
+  async function lrclibFind(artist, title, album, duration) {
+    const dur = duration ? Math.round(duration) : '';
+    const ask = async (path, params) => {
+      const r = await fetch(LRCLIB + path + '?' + qs(params));
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error('LRCLIB answered with an error (' + r.status + ').');
+      return r.json();
+    };
+    // 1) exact match, 2) the same without the album name, 3) a looser search by artist and title
+    let rec = artist ? await ask('/get', { artist_name: artist, track_name: title, album_name: album, duration: dur }) : null;
+    if (!hasText(rec) && artist && album) rec = await ask('/get', { artist_name: artist, track_name: title, duration: dur });
+    if (hasText(rec)) return rec;
+    const list = await ask('/search', artist ? { artist_name: artist, track_name: title } : { track_name: title });
+    const found = Array.isArray(list) ? list.filter(hasText) : [];
+    const close = r => !dur || Math.abs((r.duration || 0) - dur) <= 3;
+    return found.find(r => r.syncedLyrics && close(r)) || found.find(r => r.syncedLyrics) || found.find(close) || found[0] || null;
+  }
+
+  let mp3Album = '', lyrAutoText = null;
+  const findSay = msg => { $('lyrFindInfo').textContent = msg || ''; };
+  async function lookupLyrics(auto) {
+    const artist = $('lyrArtist').value.trim(), title = $('lyrTitle').value.trim();
+    if (!title) { findSay('Type the song title first, and the artist if you know it.'); return; }
+    findSay('Looking for the lyrics...');
+    let rec;
+    try { rec = await lrclibFind(artist, title, mp3Album, voices[0].buffer ? voices[0].buffer.duration : 0); }
+    catch (err) {
+      findSay(err && err.name === 'TypeError'
+        ? 'Could not reach LRCLIB. This works when the page is opened from your computer and you are online. The hosted preview blocks it. You can also search lrclib.net yourself and paste the synced lyrics below.'
+        : (err && err.message) || 'The lookup failed. Try again in a moment.');
+      return;
+    }
+    if (!rec) { findSay('No lyrics found for that title and artist. Check the spelling, or paste lyrics by hand.'); return; }
+    const text = rec.syncedLyrics || rec.plainLyrics;
+    if (auto && S.g.lyrics.trim() && S.g.lyrics !== lyrAutoText) {
+      findSay('Found lyrics, but the lyrics box already has text, so it was left alone. Press Find lyrics to replace it.');
+      return;
+    }
+    S.g.lyrics = text; lyrAutoText = text; $('lyrics').value = text; buildLyrics(); save();
+    findSay((rec.syncedLyrics ? 'Filled in time-synced lyrics' : 'Filled in lyrics without times, so the lines are spaced evenly') + ' for "' + rec.trackName + '" by ' + rec.artistName + ' from LRCLIB.');
+  }
+  async function tagsThenLookup(file) {
+    const tags = await readTags(file), guess = tagsFromName(file.name);
+    $('lyrTitle').value = tags.title || guess.title;
+    $('lyrArtist').value = tags.artist || guess.artist;
+    mp3Album = tags.album || '';
+    const usesLyrics = [0, 1, 2].some(i => isOn(i) && S.p[i].src === 'lyrics');
+    if (S.g.lyrAuto && usesLyrics) lookupLyrics(true);
+    else findSay('Read "' + ($('lyrTitle').value || 'the file name') + '" from the MP3. Press Find lyrics to look it up.');
+  }
+  $('lyrFind').addEventListener('click', () => lookupLyrics(false));
+  $('lyrAuto').addEventListener('change', e => { S.g.lyrAuto = e.target.checked; save(); });
+
   /* ---------- drawing ---------- */
   // Eye styles with a moving notch-pupil are a plain outline plus a pointed notch that slides around the rim.
   const BASE = { skull: 'lens', nround: 'round', noval: 'tall', nangry: 'angry', nlidded: 'lidded', ngoggle: 'goggle', ntri: 'triangle' };
@@ -1456,7 +1584,7 @@
     $('lgap').value = g.lgap; $('o-lgap').textContent = g.lgap.toFixed(1) + ' s';
     $('sylen').value = g.sylLen; $('o-sylen').textContent = Math.round(g.sylLen * 1000) + ' ms';
     $('autolevel').value = g.autoLevel; $('o-autolevel').textContent = (Math.round(g.autoLevel * 1000) / 10) + '%';
-    $('lfeed').value = g.lyricFeed; $('followmp3').checked = g.followMp3 !== false;
+    $('lfeed').value = g.lyricFeed; $('followmp3').checked = g.followMp3 !== false; $('lyrAuto').checked = g.lyrAuto !== false;
     $('lloud').value = g.lyricLoud; $('o-lloud').textContent = Math.round(g.lyricLoud * 100) + '%';
     buildLyrics(); if (!lyr.running) lyr.base = parseTime(g.lstart);
     $('vol').value = g.volume; $('o-vol').textContent = Math.round(g.volume * 100) + '%';
@@ -1545,6 +1673,7 @@
         say('Ready. Press Play.');
         lastFiles[i] = { name: file.name, blob: file };
         rememberFile(i);
+        if (i === 0) tagsThenLookup(file);
       } catch (err) {
         voices[i].buffer = null;
         $('n-' + i).textContent = 'No file loaded';
